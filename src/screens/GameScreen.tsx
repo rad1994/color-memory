@@ -224,18 +224,40 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
   return (
     <Animated.View style={[styles.container, { transform: [{ translateX: shakeAnim }] }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={quitToMenu} style={styles.iconButton} activeOpacity={0.7}>
-          <Ionicons name="arrow-back" size={22} color={THEME.text} />
-        </TouchableOpacity>
+        <View style={styles.headerSide}>
+          <TouchableOpacity onPress={quitToMenu} style={styles.iconButton} activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={22} color={THEME.text} />
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.levelTitle}>LEVEL {state.level}</Text>
-        <TouchableOpacity
-          onPress={() => setIsPaused(true)}
-          style={styles.iconButton}
-          activeOpacity={0.7}
-          disabled={state.phase === 'gameover'}
-        >
-          <Ionicons name="pause" size={20} color={THEME.text} />
-        </TouchableOpacity>
+
+        {/* The swipe pad claims all four edges, so the hint control lives up here
+            rather than under the board where it sat on the down arrow. */}
+        <View style={[styles.headerSide, styles.headerRight]}>
+          <TouchableOpacity
+            onPress={onHint}
+            disabled={!canHint}
+            activeOpacity={0.8}
+            style={[styles.iconButton, !canHint && styles.iconButtonOff]}
+          >
+            <Ionicons name="bulb" size={19} color={canHint ? THEME.warning : THEME.textDim} />
+            {state.hintsRemaining > 0 && (
+              <View style={styles.hintBadge}>
+                <Text style={styles.hintBadgeText}>{state.hintsRemaining}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setIsPaused(true)}
+            style={styles.iconButton}
+            activeOpacity={0.7}
+            disabled={state.phase === 'gameover'}
+          >
+            <Ionicons name="pause" size={20} color={THEME.text} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.statusRow}>
@@ -304,21 +326,6 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
       </View>
 
       <View style={styles.footer}>
-        <TouchableOpacity
-          onPress={onHint}
-          disabled={!canHint}
-          activeOpacity={0.8}
-          style={[styles.hintButton, !canHint && styles.hintButtonOff]}
-        >
-          <Ionicons
-            name="bulb"
-            size={18}
-            color={canHint ? THEME.warning : THEME.textDim}
-          />
-          <Text style={[styles.hintLabel, !canHint && styles.hintLabelOff]}>
-            HINT ×{state.hintsRemaining}
-          </Text>
-        </TouchableOpacity>
         <Text style={styles.caption}>{caption()}</Text>
       </View>
 
@@ -375,6 +382,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 18,
   },
+  headerSide: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerRight: {
+    justifyContent: 'flex-end',
+  },
   iconButton: {
     width: 40,
     height: 40,
@@ -382,6 +398,28 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.bgLight,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  iconButtonOff: {
+    opacity: 0.4,
+  },
+  hintBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: THEME.warning,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: THEME.bg,
+  },
+  hintBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: THEME.bg,
   },
   levelTitle: {
     fontSize: 20,
@@ -440,29 +478,8 @@ const styles = StyleSheet.create({
   },
   footer: {
     alignItems: 'center',
-    paddingBottom: 30,
-    gap: 14,
-  },
-  hintButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: THEME.bgLight,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  hintButtonOff: {
-    opacity: 0.4,
-  },
-  hintLabel: {
-    color: THEME.warning,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  hintLabelOff: {
-    color: THEME.textDim,
+    paddingTop: 12,
+    paddingBottom: 34,
   },
   caption: {
     textAlign: 'center',

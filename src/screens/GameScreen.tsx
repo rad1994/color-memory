@@ -171,7 +171,7 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
     switch (state.phase) {
       case 'ready':   return 'GET READY';
       case 'showing': return 'MEMORIZE THE SEQUENCE';
-      case 'input':   return mode === 'stroop' ? 'SWIPE THE COLOR, NOT THE WORD' : 'YOUR TURN';
+      case 'input':   return mode === 'stroop' ? 'ANSWER THE COLOR, NOT THE WORD' : 'YOUR TURN';
       case 'fail':    return 'WRONG — TRY AGAIN';
       default:        return '';
     }

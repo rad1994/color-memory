@@ -1,9 +1,16 @@
-import React, { useRef, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, PanResponder } from 'react-native';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, PanResponder, Pressable, Platform } from 'react-native';
 import { THEME } from '../constants/colors';
 import { STROOP_COLORS, SwipeDirection } from '../constants/stroop';
 
 const SWIPE_THRESHOLD = 30;
+
+const KEY_TO_DIRECTION: Record<string, SwipeDirection> = {
+  ArrowLeft: 'left',
+  ArrowRight: 'right',
+  ArrowUp: 'up',
+  ArrowDown: 'down',
+};
 
 interface Props {
   onSwipe: (direction: SwipeDirection) => void;
@@ -21,10 +28,25 @@ export function SwipePad({ onSwipe, disabled, size }: Props) {
   onSwipeRef.current = onSwipe;
   disabledRef.current = disabled;
 
-  const flash = useCallback((direction: SwipeDirection) => {
+  const trigger = useCallback((direction: SwipeDirection) => {
+    if (disabledRef.current) return;
     setActiveDirection(direction);
     setTimeout(() => setActiveDirection(null), 180);
+    onSwipeRef.current(direction);
   }, []);
+
+  // Swiping is meaningless with a mouse, so desktop gets the arrow keys.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const direction = KEY_TO_DIRECTION[event.key];
+      if (!direction) return;
+      event.preventDefault();
+      trigger(direction);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [trigger]);
 
   const responder = useRef(
     PanResponder.create({
@@ -32,7 +54,6 @@ export function SwipePad({ onSwipe, disabled, size }: Props) {
       onMoveShouldSetPanResponder: (_, gesture) =>
         Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4,
       onPanResponderRelease: (_, gesture) => {
-        if (disabledRef.current) return;
         const { dx, dy } = gesture;
         if (Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) return;
 
@@ -41,8 +62,7 @@ export function SwipePad({ onSwipe, disabled, size }: Props) {
             ? dx > 0 ? 'right' : 'left'
             : dy > 0 ? 'down' : 'up';
 
-        flash(direction);
-        onSwipeRef.current(direction);
+        trigger(direction);
       },
     })
   ).current;
@@ -51,34 +71,33 @@ export function SwipePad({ onSwipe, disabled, size }: Props) {
     const color = STROOP_COLORS.find(c => c.direction === direction)!;
     const isActive = activeDirection === direction;
     return (
-      <View
+      <Pressable
+        onPress={() => trigger(direction)}
+        disabled={disabled}
         style={[
           styles.badge,
           positionStyle,
           {
             backgroundColor: color.hex,
-            opacity: disabled ? 0.35 : isActive ? 1 : 0.85,
-            transform: [{ scale: isActive ? 1.25 : 1 }],
+            opacity: disabled ? 0.35 : isActive ? 1 : 0.9,
+            transform: [{ scale: isActive ? 1.22 : 1 }],
           },
         ]}
       >
         <Text style={styles.arrow}>{color.arrow}</Text>
-      </View>
+      </Pressable>
     );
   };
 
   return (
-    <View
-      style={[styles.pad, { width: size, height: size }]}
-      {...responder.panHandlers}
-    >
-      <View style={styles.centerHint}>
-        <Text style={styles.hintText}>{disabled ? '' : 'swipe'}</Text>
-      </View>
+    <View style={[styles.pad, { width: size, height: size }]} {...responder.panHandlers}>
+      <Text style={styles.hint}>
+        {disabled ? '' : Platform.OS === 'web' ? 'ARROW KEYS OR CLICK' : 'SWIPE OR TAP'}
+      </Text>
       {badge('up', { top: 0, alignSelf: 'center' })}
       {badge('down', { bottom: 0, alignSelf: 'center' })}
-      {badge('left', { left: 0, top: size / 2 - 24 })}
-      {badge('right', { right: 0, top: size / 2 - 24 })}
+      {badge('left', { left: 0, top: size / 2 - 26 })}
+      {badge('right', { right: 0, top: size / 2 - 26 })}
     </View>
   );
 }
@@ -94,26 +113,23 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.18)',
   },
   arrow: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '900',
     color: 'rgba(255,255,255,0.95)',
   },
-  centerHint: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  hintText: {
+  hint: {
     color: THEME.textDim,
-    fontSize: 12,
-    letterSpacing: 2,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.5,
   },
 });

@@ -11,12 +11,13 @@ const indexPath = join(OUT_DIR, 'index.html');
 let html = readFileSync(indexPath, 'utf8');
 
 // GitHub Pages serves the app from a subdirectory, so absolute "/..." paths
-// resolve to the domain root and 404. Anchor them with <base> and strip the
-// leading slash off local asset references.
+// resolve to the domain root and 404. Make asset references relative, then
+// anchor them with <base>. Order matters: inserting <base> first would let the
+// rewrite strip its own leading slash, leaving a doubled "/color-memory/color-memory/" path.
+html = html.replace(/(src|href)="\/(?!\/)/g, '$1="');
 if (!html.includes('<base ')) {
   html = html.replace('<meta charset="utf-8" />', `<meta charset="utf-8" />\n    <base href="${BASE_PATH}" />`);
 }
-html = html.replace(/(src|href)="\/(?!\/)/g, '$1="');
 writeFileSync(indexPath, html);
 
 // Jekyll strips directories beginning with "_" (killing _expo/), and gh-pages

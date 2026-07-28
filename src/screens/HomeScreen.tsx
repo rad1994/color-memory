@@ -1,16 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Animated,
-  Dimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { THEME, GAME_COLORS } from '../constants/colors';
 import { getAllStats } from '../engine/storage';
-
-const { width } = Dimensions.get('window');
 
 interface Props {
   onStartGame: (mode: 'classic' | 'stroop') => void;
@@ -19,92 +17,105 @@ interface Props {
   onOpenAchievements: () => void;
 }
 
+const LOGO_TILES = ['red', 'green', 'blue', 'yellow'];
+
 export function HomeScreen({ onStartGame, onOpenStats, onOpenSettings, onOpenAchievements }: Props) {
-  const [stats, setStats] = useState({ classicHigh: 0, stroopHigh: 0, classicLevel: 0, stroopLevel: 0, bestStreak: 0, totalGames: 0 });
-  const titleScale = new Animated.Value(0.8);
-  const titleOpacity = new Animated.Value(0);
+  const [stats, setStats] = useState({
+    classicHigh: 0, stroopHigh: 0, classicLevel: 0, stroopLevel: 0, bestStreak: 0, totalGames: 0,
+  });
+
+  const scale = useRef(new Animated.Value(0.85)).current;
+  const fade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     getAllStats().then(setStats);
     Animated.parallel([
-      Animated.spring(titleScale, { toValue: 1, useNativeDriver: true, speed: 8 }),
-      Animated.timing(titleOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 9 }),
+      Animated.timing(fade, { toValue: 1, duration: 500, useNativeDriver: true }),
     ]).start();
   }, []);
 
+  const bestScore = Math.max(stats.classicHigh, stats.stroopHigh);
+
   return (
     <View style={styles.container}>
-      <View style={styles.bgDots}>
-        {GAME_COLORS.slice(0, 6).map((c, i) => (
-          <View
-            key={c.id}
-            style={[
-              styles.bgDot,
-              {
-                backgroundColor: c.hex,
-                opacity: 0.08,
-                left: `${15 + i * 15}%` as any,
-                top: `${10 + (i % 3) * 30}%` as any,
-                width: 60 + i * 20,
-                height: 60 + i * 20,
-                borderRadius: 30 + i * 10,
-              },
-            ]}
-          />
-        ))}
-      </View>
+      <Animated.View style={[styles.logoBlock, { opacity: fade, transform: [{ scale }] }]}>
+        <View style={styles.logoCard}>
+          <View style={styles.logoGrid}>
+            {LOGO_TILES.map(id => (
+              <View
+                key={id}
+                style={[
+                  styles.logoTile,
+                  { backgroundColor: GAME_COLORS.find(c => c.id === id)!.hex },
+                ]}
+              />
+            ))}
+          </View>
+        </View>
 
-      <Animated.View style={[styles.titleContainer, { transform: [{ scale: titleScale }], opacity: titleOpacity }]}>
-        <Text style={styles.titleColor}>COLOR</Text>
-        <Text style={styles.titleMemory}>MEMORY</Text>
-        {stats.classicHigh > 0 && (
-          <Text style={styles.highScore}>Best: {stats.classicHigh} pts</Text>
+        <Text style={styles.wordmarkTop}>MEMORY</Text>
+        <View style={styles.wordmarkRow}>
+          {'COLORS'.split('').map((letter, i) => (
+            <Text
+              key={i}
+              style={[styles.wordmarkLetter, { color: GAME_COLORS[i % GAME_COLORS.length].hex }]}
+            >
+              {letter}
+            </Text>
+          ))}
+        </View>
+
+        {bestScore > 0 && (
+          <Text style={styles.best}>BEST {bestScore.toLocaleString()}</Text>
         )}
       </Animated.View>
 
-      <View style={styles.buttons}>
+      <View style={styles.actions}>
         <TouchableOpacity
-          style={[styles.button, styles.primaryButton]}
+          style={[styles.primaryButton, { backgroundColor: THEME.accent }]}
           onPress={() => onStartGame('classic')}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
         >
-          <Text style={styles.buttonIcon}>🎨</Text>
-          <View>
-            <Text style={styles.buttonText}>Classic Mode</Text>
-            <Text style={styles.buttonSub}>Remember the color sequence</Text>
-          </View>
+          <Ionicons name="play" size={20} color={THEME.text} />
+          <Text style={styles.primaryLabel}>PLAY</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.button, styles.stroopButton]}
+          style={[styles.primaryButton, { backgroundColor: THEME.purple }]}
           onPress={() => onStartGame('stroop')}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
         >
-          <Text style={styles.buttonIcon}>🧠</Text>
-          <View>
-            <Text style={styles.buttonText}>Stroop Mode</Text>
-            <Text style={styles.buttonSub}>Swipe the ink, not the word</Text>
-          </View>
+          <Ionicons name="color-palette" size={20} color={THEME.text} />
+          <Text style={styles.primaryLabel}>STROOP MODE</Text>
         </TouchableOpacity>
 
-        <View style={styles.secondaryRow}>
-          <TouchableOpacity style={styles.secondaryButton} onPress={onOpenStats} activeOpacity={0.8}>
-            <Text style={styles.secondaryIcon}>📊</Text>
-            <Text style={styles.secondaryText}>Stats</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.secondaryButton} onPress={onOpenAchievements} activeOpacity={0.8}>
-            <Text style={styles.secondaryIcon}>🏆</Text>
-            <Text style={styles.secondaryText}>Awards</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.secondaryButton} onPress={onOpenSettings} activeOpacity={0.8}>
-            <Text style={styles.secondaryIcon}>⚙️</Text>
-            <Text style={styles.secondaryText}>Settings</Text>
-          </TouchableOpacity>
+        <View style={styles.iconRow}>
+          <IconAction icon="stats-chart" label="STATS" onPress={onOpenStats} />
+          <IconAction icon="trophy" label="SCORES" onPress={onOpenAchievements} />
+          <IconAction icon="settings-sharp" label="SETTINGS" onPress={onOpenSettings} />
         </View>
       </View>
     </View>
+  );
+}
+
+function IconAction({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.iconAction} onPress={onPress} activeOpacity={0.8}>
+      <View style={styles.iconTile}>
+        <Ionicons name={icon} size={22} color={THEME.text} />
+      </View>
+      <Text style={styles.iconLabel}>{label}</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -112,95 +123,98 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: THEME.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  logoBlock: {
+    alignItems: 'center',
+    marginBottom: 56,
+  },
+  logoCard: {
+    width: 132,
+    height: 132,
+    borderRadius: 30,
+    backgroundColor: THEME.bgLight,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
   },
-  bgDots: {
-    position: 'absolute' as const,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  logoGrid: {
+    width: 96,
+    height: 96,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  bgDot: {
-    position: 'absolute',
+  logoTile: {
+    width: 44,
+    height: 44,
+    borderRadius: 11,
   },
-  titleContainer: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  titleColor: {
-    fontSize: 52,
+  wordmarkTop: {
+    fontSize: 34,
     fontWeight: '900',
-    color: THEME.accent,
-    letterSpacing: 8,
-  },
-  titleMemory: {
-    fontSize: 36,
-    fontWeight: '300',
     color: THEME.text,
-    letterSpacing: 12,
-    marginTop: -4,
+    letterSpacing: 5,
+    marginTop: 22,
   },
-  highScore: {
-    fontSize: 14,
+  wordmarkRow: {
+    flexDirection: 'row',
+    marginTop: 2,
+  },
+  wordmarkLetter: {
+    fontSize: 30,
+    fontWeight: '900',
+    letterSpacing: 5,
+  },
+  best: {
+    marginTop: 16,
     color: THEME.textDim,
-    marginTop: 12,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 2,
   },
-  buttons: {
+  actions: {
     width: '100%',
     maxWidth: 340,
   },
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 18,
-    borderRadius: 16,
-    marginBottom: 14,
-  },
   primaryButton: {
-    backgroundColor: THEME.accent,
-  },
-  stroopButton: {
-    backgroundColor: THEME.bgCard,
-    borderWidth: 1,
-    borderColor: 'rgba(233, 69, 96, 0.3)',
-  },
-  buttonIcon: {
-    fontSize: 28,
-    marginRight: 14,
-  },
-  buttonText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: THEME.text,
-  },
-  buttonSub: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
-    marginTop: 2,
-  },
-  secondaryRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  secondaryButton: {
-    flex: 1,
     alignItems: 'center',
-    paddingVertical: 16,
-    marginHorizontal: 4,
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 17,
+    borderRadius: 14,
+    marginBottom: 12,
+  },
+  primaryLabel: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: THEME.text,
+    letterSpacing: 1.5,
+  },
+  iconRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 14,
+    marginTop: 14,
+  },
+  iconAction: {
+    alignItems: 'center',
+    gap: 7,
+  },
+  iconTile: {
+    width: 58,
+    height: 58,
+    borderRadius: 16,
     backgroundColor: THEME.bgLight,
-    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  secondaryIcon: {
-    fontSize: 22,
-    marginBottom: 4,
-  },
-  secondaryText: {
-    fontSize: 12,
+  iconLabel: {
+    fontSize: 10,
+    fontWeight: '700',
     color: THEME.textDim,
-    fontWeight: '600',
+    letterSpacing: 1,
   },
 });

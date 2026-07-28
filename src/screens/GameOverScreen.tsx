@@ -7,6 +7,7 @@ import {
   Animated,
   ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../constants/colors';
 import { Achievement } from '../engine/storage';
 
@@ -15,63 +16,73 @@ interface Props {
   level: number;
   mode: 'classic' | 'stroop';
   newAchievements: Achievement[];
+  isNewRecord?: boolean;
   onPlayAgain: () => void;
   onHome: () => void;
 }
 
-export function GameOverScreen({ score, level, mode, newAchievements, onPlayAgain, onHome }: Props) {
-  const fadeIn = useRef(new Animated.Value(0)).current;
-  const slideUp = useRef(new Animated.Value(50)).current;
+export function GameOverScreen({
+  score,
+  level,
+  mode,
+  newAchievements,
+  isNewRecord,
+  onPlayAgain,
+  onHome,
+}: Props) {
+  const fade = useRef(new Animated.Value(0)).current;
+  const rise = useRef(new Animated.Value(40)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeIn, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.spring(slideUp, { toValue: 0, useNativeDriver: true, speed: 8 }),
+      Animated.timing(fade, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.spring(rise, { toValue: 0, useNativeDriver: true, speed: 9 }),
     ]).start();
   }, []);
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.content, { opacity: fadeIn, transform: [{ translateY: slideUp }] }]}>
-        <Text style={styles.gameOverText}>Game Over</Text>
+      <Animated.View style={[styles.card, { opacity: fade, transform: [{ translateY: rise }] }]}>
+        <View style={[styles.badge, { backgroundColor: isNewRecord ? THEME.accent : THEME.danger }]}>
+          <Ionicons name={isNewRecord ? 'trophy' : 'heart-dislike'} size={34} color={THEME.text} />
+        </View>
 
-        <View style={styles.statsCard}>
-          <View style={styles.statRow}>
-            <Text style={styles.statLabel}>Score</Text>
-            <Text style={styles.statValue}>{score}</Text>
+        <Text style={styles.title}>{isNewRecord ? 'NEW RECORD!' : 'OUT OF LIVES'}</Text>
+        <Text style={styles.score}>{score.toLocaleString()}</Text>
+
+        <View style={styles.metaRow}>
+          <View style={styles.metaItem}>
+            <Text style={styles.metaValue}>{level}</Text>
+            <Text style={styles.metaLabel}>LEVEL</Text>
           </View>
-          <View style={styles.divider} />
-          <View style={styles.statRow}>
-            <Text style={styles.statLabel}>Level Reached</Text>
-            <Text style={styles.statValue}>{level}</Text>
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.statRow}>
-            <Text style={styles.statLabel}>Mode</Text>
-            <Text style={styles.statValue}>{mode === 'classic' ? 'Classic' : 'Stroop'}</Text>
+          <View style={styles.metaDivider} />
+          <View style={styles.metaItem}>
+            <Text style={styles.metaValue}>{mode === 'classic' ? 'CLASSIC' : 'STROOP'}</Text>
+            <Text style={styles.metaLabel}>MODE</Text>
           </View>
         </View>
 
         {newAchievements.length > 0 && (
-          <View style={styles.achievementsSection}>
-            <Text style={styles.achievementsTitle}>🏆 New Achievements!</Text>
-            <ScrollView style={styles.achievementsList} showsVerticalScrollIndicator={false}>
-              {newAchievements.map(a => (
-                <View key={a.id} style={styles.achievementItem}>
+          <ScrollView style={styles.achievements} showsVerticalScrollIndicator={false}>
+            {newAchievements.map(a => (
+              <View key={a.id} style={styles.achievementRow}>
+                <Ionicons name="trophy" size={16} color={THEME.warning} />
+                <View style={styles.achievementText}>
                   <Text style={styles.achievementName}>{a.title}</Text>
                   <Text style={styles.achievementDesc}>{a.description}</Text>
                 </View>
-              ))}
-            </ScrollView>
-          </View>
+              </View>
+            ))}
+          </ScrollView>
         )}
 
-        <TouchableOpacity style={styles.playAgainButton} onPress={onPlayAgain} activeOpacity={0.8}>
-          <Text style={styles.playAgainText}>Play Again</Text>
+        <TouchableOpacity style={styles.playAgain} onPress={onPlayAgain} activeOpacity={0.85}>
+          <Ionicons name="refresh" size={18} color={THEME.text} />
+          <Text style={styles.playAgainLabel}>PLAY AGAIN</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.homeButton} onPress={onHome} activeOpacity={0.8}>
-          <Text style={styles.homeText}>Home</Text>
+        <TouchableOpacity style={styles.home} onPress={onHome} activeOpacity={0.85}>
+          <Text style={styles.homeLabel}>HOME</Text>
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -84,101 +95,119 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.bg,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 26,
   },
-  content: {
+  card: {
     width: '100%',
-    maxWidth: 340,
+    maxWidth: 330,
+    backgroundColor: THEME.bgCard,
+    borderRadius: 22,
+    padding: 26,
     alignItems: 'center',
   },
-  gameOverText: {
-    fontSize: 42,
-    fontWeight: '900',
-    color: THEME.accent,
-    marginBottom: 32,
+  badge: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -52,
+    marginBottom: 14,
+    borderWidth: 5,
+    borderColor: THEME.bgCard,
+  },
+  title: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: THEME.textDim,
     letterSpacing: 2,
   },
-  statsCard: {
-    width: '100%',
-    backgroundColor: THEME.bgCard,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
+  score: {
+    fontSize: 44,
+    fontWeight: '900',
+    color: THEME.text,
+    marginTop: 4,
   },
-  statRow: {
+  metaRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
+    marginTop: 18,
+    marginBottom: 6,
   },
-  statLabel: {
-    fontSize: 16,
-    color: THEME.textDim,
+  metaItem: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
   },
-  statValue: {
-    fontSize: 22,
+  metaValue: {
+    fontSize: 17,
     fontWeight: '800',
     color: THEME.text,
   },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  achievementsSection: {
-    width: '100%',
-    marginBottom: 24,
-  },
-  achievementsTitle: {
-    fontSize: 18,
+  metaLabel: {
+    fontSize: 10,
     fontWeight: '700',
-    color: THEME.warning,
-    marginBottom: 12,
-    textAlign: 'center',
+    color: THEME.textDim,
+    letterSpacing: 1.5,
+    marginTop: 2,
   },
-  achievementsList: {
-    maxHeight: 140,
+  metaDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: THEME.border,
   },
-  achievementItem: {
+  achievements: {
+    alignSelf: 'stretch',
+    maxHeight: 120,
+    marginTop: 14,
+  },
+  achievementRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     backgroundColor: THEME.bgLight,
     borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: THEME.warning,
+    padding: 10,
+    marginBottom: 7,
+  },
+  achievementText: {
+    flex: 1,
   },
   achievementName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: THEME.text,
   },
   achievementDesc: {
-    fontSize: 12,
+    fontSize: 11,
     color: THEME.textDim,
-    marginTop: 2,
   },
-  playAgainButton: {
-    width: '100%',
+  playAgain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    alignSelf: 'stretch',
     backgroundColor: THEME.accent,
-    paddingVertical: 16,
-    borderRadius: 14,
-    marginBottom: 12,
+    paddingVertical: 15,
+    borderRadius: 13,
+    marginTop: 20,
   },
-  playAgainText: {
-    fontSize: 18,
-    fontWeight: '700',
+  playAgainLabel: {
+    fontSize: 15,
+    fontWeight: '800',
     color: THEME.text,
-    textAlign: 'center',
+    letterSpacing: 1.2,
   },
-  homeButton: {
-    width: '100%',
-    backgroundColor: THEME.bgLight,
-    paddingVertical: 14,
-    borderRadius: 14,
+  home: {
+    alignSelf: 'stretch',
+    paddingVertical: 13,
+    marginTop: 8,
   },
-  homeText: {
-    fontSize: 16,
-    fontWeight: '600',
+  homeLabel: {
+    fontSize: 13,
+    fontWeight: '700',
     color: THEME.textDim,
+    letterSpacing: 1.2,
     textAlign: 'center',
   },
 });

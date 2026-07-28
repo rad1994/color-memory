@@ -7,6 +7,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { THEME, GameColor } from '../constants/colors';
 import { getMotivationalText } from '../constants/levels';
@@ -18,16 +19,21 @@ import {
   handleInput,
   advanceLevel,
 } from '../engine/gameEngine';
-import { saveGameResult, getSettings } from '../engine/storage';
-import { ColorWheel } from '../components/ColorWheel';
+import { saveGameResult, getSettings, getHighScore, Achievement } from '../engine/storage';
+import { ColorGrid } from '../components/ColorGrid';
+import { SequenceDots } from '../components/SequenceDots';
 import { SwipePad } from '../components/SwipePad';
-import { Achievement } from '../engine/storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface Props {
   mode: GameMode;
-  onGameOver: (score: number, level: number, newAchievements: Achievement[]) => void;
+  onGameOver: (
+    score: number,
+    level: number,
+    newAchievements: Achievement[],
+    isNewRecord: boolean
+  ) => void;
   onBack: () => void;
 }
 
@@ -37,7 +43,6 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
   const [motivText, setMotivText] = useState('');
   const [settings, setSettings] = useState({ soundEnabled: true, hapticEnabled: true, showTutorial: true });
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const scorePopAnim = useRef(new Animated.Value(0)).current;
   const motivAnim = useRef(new Animated.Value(0)).current;
@@ -60,6 +65,7 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
 
     const totalItems = mode === 'stroop' ? state.stroopSequence.length : state.sequence.length;
     let current = 0;
+    let timers: ReturnType<typeof setTimeout>[] = [];
 
     setShowingIndex(-1);
 
@@ -74,14 +80,14 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       }
       current++;
-      setTimeout(() => {
+      timers.push(setTimeout(() => {
         setShowingIndex(-1);
-        setTimeout(showNext, 200);
-      }, state.levelConfig.displayTime);
+        timers.push(setTimeout(showNext, 200));
+      }, state.levelConfig.displayTime));
     };
 
-    const startTimer = setTimeout(showNext, 400);
-    return () => clearTimeout(startTimer);
+    timers.push(setTimeout(showNext, 400));
+    return () => timers.forEach(clearTimeout);
   }, [state.phase, state.level]);
 
   useEffect(() => {
@@ -128,11 +134,14 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
 
   useEffect(() => {
     if (state.phase === 'gameover') {
-      saveGameResult(mode, state.score, state.level, state.bestStreak).then(newAchievements => {
+      // Read the old best before saving, otherwise the just-saved score is the best.
+      (async () => {
+        const previousBest = await getHighScore(mode);
+        const newAchievements = await saveGameResult(mode, state.score, state.level, state.bestStreak);
         setTimeout(() => {
-          onGameOver(state.score, state.level, newAchievements);
+          onGameOver(state.score, state.level, newAchievements, state.score > previousBest);
         }, 500);
-      });
+      })();
       if (settings.hapticEnabled) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       }
@@ -153,157 +162,113 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
     onColorPress(COLOR_BY_DIRECTION[direction]);
   }, [onColorPress]);
 
-  const getCurrentHighlight = (): string | undefined => {
-    if (state.phase !== 'showing' || showingIndex < 0) return undefined;
-    return state.sequence[showingIndex]?.id;
+  const isShowing = state.phase === 'showing';
+  const dotSequence = mode === 'stroop'
+    ? state.stroopSequence.map(item => item.ink)
+    : state.sequence;
+
+  const caption = () => {
+    switch (state.phase) {
+      case 'ready':   return 'GET READY';
+      case 'showing': return 'MEMORIZE THE SEQUENCE';
+      case 'input':   return mode === 'stroop' ? 'SWIPE THE COLOR, NOT THE WORD' : 'YOUR TURN';
+      case 'fail':    return 'WRONG — TRY AGAIN';
+      default:        return '';
+    }
   };
 
-  const renderSequenceDisplay = () => {
-    if (state.phase === 'ready') {
-      return (
-        <View style={styles.displayArea}>
-          <Text style={styles.levelText}>Level {state.level}</Text>
-          <Text style={styles.readyText}>Get Ready!</Text>
-        </View>
-      );
-    }
-
-    if (state.phase === 'showing') {
-      if (mode === 'stroop' && showingIndex >= 0 && state.stroopSequence[showingIndex]) {
-        const item = state.stroopSequence[showingIndex];
-        return (
-          <View style={styles.displayArea}>
-            <Text style={[styles.stroopWord, { color: item.ink.hex }]}>
-              {item.word.name}
-            </Text>
-          </View>
-        );
-      }
-      if (showingIndex >= 0 && state.sequence[showingIndex]) {
-        return (
-          <View style={styles.displayArea}>
-            <Animated.View
-              style={[
-                styles.colorDisplay,
-                {
-                  backgroundColor: state.sequence[showingIndex].hex,
-                  shadowColor: state.sequence[showingIndex].hex,
-                },
-              ]}
-            />
-          </View>
-        );
-      }
-      return (
-        <View style={styles.displayArea}>
-          <Text style={styles.readyText}>Watch...</Text>
-        </View>
-      );
-    }
-
-    if (state.phase === 'input') {
-      const total = mode === 'stroop' ? state.stroopSequence.length : state.sequence.length;
-      return (
-        <View style={styles.displayArea}>
-          <Text style={styles.inputPrompt}>Your Turn!</Text>
-          <View style={styles.progressDots}>
-            {Array.from({ length: total }).map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.progressDot,
-                  i < state.inputIndex && styles.progressDotFilled,
-                  i === state.inputIndex && styles.progressDotCurrent,
-                ]}
-              />
-            ))}
-          </View>
-        </View>
-      );
-    }
-
-    return null;
+  const renderStroopWord = () => {
+    const item = isShowing && showingIndex >= 0 ? state.stroopSequence[showingIndex] : null;
+    return (
+      <View style={styles.wordArea}>
+        {item && (
+          <Text style={[styles.stroopWord, { color: item.ink.hex }]}>{item.word.name}</Text>
+        )}
+      </View>
+    );
   };
 
   return (
     <Animated.View style={[styles.container, { transform: [{ translateX: shakeAnim }] }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backText}>✕</Text>
+        <TouchableOpacity onPress={onBack} style={styles.iconButton} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={22} color={THEME.text} />
         </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.levelLabel}>LVL {state.level}</Text>
-          {state.streak >= 3 && (
-            <Text style={styles.streakBadge}>🔥 {state.streak}</Text>
-          )}
-        </View>
-        <View style={styles.scoreContainer}>
-          <Animated.Text
-            style={[
-              styles.scoreText,
-              {
-                transform: [
-                  { scale: scorePopAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.3] }) },
-                ],
-              },
-            ]}
-          >
-            {state.score}
-          </Animated.Text>
+        <Text style={styles.levelTitle}>LEVEL {state.level}</Text>
+        <View style={styles.iconButton}>
+          <Ionicons name="pause" size={20} color={THEME.text} />
         </View>
       </View>
 
-      <View style={styles.livesRow}>
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Text key={i} style={[styles.life, i >= state.lives && styles.lifeLost]}>
-            {i < state.lives ? '❤️' : '🖤'}
-          </Text>
-        ))}
-        {state.comboMultiplier > 1 && (
-          <Text style={styles.comboText}>×{state.comboMultiplier}</Text>
+      <View style={styles.statusRow}>
+        <View style={styles.lives}>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Ionicons
+              key={i}
+              name={i < state.lives ? 'heart' : 'heart-outline'}
+              size={18}
+              color={i < state.lives ? THEME.danger : THEME.textDim}
+            />
+          ))}
+        </View>
+        {state.streak >= 3 && (
+          <View style={styles.streakPill}>
+            <Ionicons name="flame" size={13} color={THEME.warning} />
+            <Text style={styles.streakText}>{state.streak}</Text>
+          </View>
+        )}
+        <Animated.Text
+          style={[
+            styles.score,
+            { transform: [{ scale: scorePopAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.25] }) }] },
+          ]}
+        >
+          {state.score.toLocaleString()}
+        </Animated.Text>
+      </View>
+
+      <View style={styles.dotsWrap}>
+        <SequenceDots
+          sequence={dotSequence}
+          filledCount={state.phase === 'input' ? state.inputIndex : 0}
+        />
+      </View>
+
+      {mode === 'stroop' && renderStroopWord()}
+
+      <View style={styles.playArea}>
+        {mode === 'stroop' ? (
+          <SwipePad
+            onSwipe={onSwipe}
+            disabled={state.phase !== 'input'}
+            size={Math.min(SCREEN_WIDTH - 72, 260)}
+          />
+        ) : (
+          <ColorGrid
+            colors={state.palette}
+            onPress={onColorPress}
+            disabled={state.phase !== 'input'}
+            highlightedId={showingIndex >= 0 ? state.sequence[showingIndex]?.id : undefined}
+            isShowing={isShowing}
+            width={Math.min(SCREEN_WIDTH - 48, 320)}
+          />
         )}
       </View>
 
-      {renderSequenceDisplay()}
+      <Text style={styles.caption}>{caption()}</Text>
 
       <Animated.View
+        pointerEvents="none"
         style={[
-          styles.motivContainer,
+          styles.motivOverlay,
           {
             opacity: motivAnim,
-            transform: [
-              { scale: motivAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) },
-            ],
+            transform: [{ scale: motivAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
           },
         ]}
       >
         <Text style={styles.motivText}>{motivText}</Text>
       </Animated.View>
-
-      <View style={styles.wheelContainer}>
-        {mode === 'stroop' ? (
-          <SwipePad
-            onSwipe={onSwipe}
-            disabled={state.phase !== 'input'}
-            size={Math.min(SCREEN_WIDTH - 64, 280)}
-          />
-        ) : (
-          <ColorWheel
-            colors={state.palette}
-            rotation={state.wheelRotation}
-            onPress={onColorPress}
-            disabled={state.phase !== 'input'}
-            highlightedId={getCurrentHighlight()}
-            size={Math.min(SCREEN_WIDTH - 48, 320)}
-          />
-        )}
-      </View>
-
-      {mode === 'stroop' && (
-        <Text style={styles.stroopHint}>
-          Swipe the COLOR you saw — not the word you read
-        </Text>
-      )}
     </Animated.View>
   );
 }
@@ -312,155 +277,94 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: THEME.bg,
-    paddingTop: 50,
+    paddingTop: 54,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 8,
+    paddingHorizontal: 18,
   },
-  backButton: {
+  iconButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 12,
     backgroundColor: THEME.bgLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  backText: {
-    color: THEME.textDim,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  headerCenter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  levelLabel: {
-    fontSize: 18,
+  levelTitle: {
+    fontSize: 20,
     fontWeight: '800',
     color: THEME.text,
-    letterSpacing: 2,
+    letterSpacing: 1.5,
   },
-  streakBadge: {
-    fontSize: 14,
-    color: THEME.warning,
-    fontWeight: '700',
-  },
-  scoreContainer: {
-    minWidth: 60,
-    alignItems: 'flex-end',
-  },
-  scoreText: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: THEME.accent,
-  },
-  livesRow: {
+  statusRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 8,
-    gap: 6,
-  },
-  life: {
-    fontSize: 22,
-  },
-  lifeLost: {
-    opacity: 0.4,
-  },
-  comboText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: THEME.warning,
-    marginLeft: 8,
-  },
-  displayArea: {
-    height: 160,
     justifyContent: 'center',
-    alignItems: 'center',
+    gap: 14,
+    paddingTop: 18,
   },
-  levelText: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: THEME.text,
-    marginBottom: 8,
-  },
-  readyText: {
-    fontSize: 18,
-    color: THEME.textDim,
-    fontWeight: '500',
-  },
-  colorDisplay: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    shadowOpacity: 0.6,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  inputPrompt: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: THEME.text,
-    marginBottom: 16,
-  },
-  progressDots: {
+  lives: {
     flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    maxWidth: 280,
+    gap: 4,
   },
-  progressDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  streakPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     backgroundColor: THEME.bgLight,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 10,
   },
-  progressDotFilled: {
-    backgroundColor: THEME.success,
-    borderColor: THEME.success,
+  streakText: {
+    color: THEME.warning,
+    fontWeight: '800',
+    fontSize: 12,
   },
-  progressDotCurrent: {
-    backgroundColor: THEME.accent,
-    borderColor: THEME.accent,
+  score: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: THEME.text,
+  },
+  dotsWrap: {
+    paddingTop: 18,
+    minHeight: 34,
+  },
+  wordArea: {
+    height: 90,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   stroopWord: {
-    fontSize: 52,
+    fontSize: 46,
     fontWeight: '900',
     letterSpacing: 3,
   },
-  motivContainer: {
-    position: 'absolute',
-    top: '40%',
-    alignSelf: 'center',
-    zIndex: 10,
-  },
-  motivText: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: THEME.warning,
-    textAlign: 'center',
-    textShadowColor: 'rgba(255, 195, 18, 0.5)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 20,
-  },
-  wheelContainer: {
+  playArea: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  stroopHint: {
+  caption: {
     textAlign: 'center',
     color: THEME.textDim,
     fontSize: 12,
-    paddingBottom: 24,
-    fontStyle: 'italic',
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    paddingBottom: 34,
+  },
+  motivOverlay: {
+    position: 'absolute',
+    top: '42%',
+    alignSelf: 'center',
+  },
+  motivText: {
+    fontSize: 30,
+    fontWeight: '900',
+    color: THEME.warning,
+    textAlign: 'center',
   },
 });

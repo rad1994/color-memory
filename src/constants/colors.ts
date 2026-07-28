@@ -5,26 +5,30 @@ export interface GameColor {
   sound: number; // frequency in Hz for tone generation
 }
 
+// Palette taken from design/style-guide.png — the five tile colors, then four
+// extras that extend the set on later levels while keeping the same saturation.
 export const GAME_COLORS: GameColor[] = [
-  { id: 'red',    name: 'Red',    hex: '#FF4757', sound: 261 },
-  { id: 'blue',   name: 'Blue',   hex: '#3742FA', sound: 329 },
-  { id: 'green',  name: 'Green',  hex: '#2ED573', sound: 392 },
-  { id: 'yellow', name: 'Yellow', hex: '#FFC312', sound: 440 },
-  { id: 'purple', name: 'Purple', hex: '#A55EEA', sound: 523 },
-  { id: 'orange', name: 'Orange', hex: '#FF6348', sound: 587 },
-  { id: 'cyan',   name: 'Cyan',   hex: '#18DCFF', sound: 659 },
-  { id: 'pink',   name: 'Pink',   hex: '#FF6B81', sound: 698 },
+  { id: 'red',    name: 'RED',    hex: '#EA3B30', sound: 261 },
+  { id: 'green',  name: 'GREEN',  hex: '#2FA84F', sound: 329 },
+  { id: 'blue',   name: 'BLUE',   hex: '#1B6DE8', sound: 392 },
+  { id: 'yellow', name: 'YELLOW', hex: '#F5C518', sound: 440 },
+  { id: 'purple', name: 'PURPLE', hex: '#8B3FE8', sound: 523 },
+  { id: 'orange', name: 'ORANGE', hex: '#F0761E', sound: 587 },
+  { id: 'cyan',   name: 'CYAN',   hex: '#17BEBB', sound: 659 },
+  { id: 'pink',   name: 'PINK',   hex: '#E8407A', sound: 698 },
 ];
 
 export const THEME = {
-  bg: '#0F0F1A',
-  bgLight: '#1A1A2E',
-  bgCard: '#16213E',
-  text: '#EAEAEA',
-  textDim: '#7F8C8D',
-  accent: '#E94560',
-  accentGlow: 'rgba(233, 69, 96, 0.3)',
-  success: '#2ED573',
-  warning: '#FFC312',
-  danger: '#FF4757',
+  bg: '#0A0A0F',
+  bgLight: '#16161D',
+  bgCard: '#1B1B23',
+  bgElevated: '#22222B',
+  text: '#FFFFFF',
+  textDim: '#8A8A94',
+  accent: '#1B6DE8',
+  success: '#2FA84F',
+  warning: '#F5C518',
+  danger: '#EA3B30',
+  purple: '#8B3FE8',
+  border: 'rgba(255,255,255,0.08)',
 };

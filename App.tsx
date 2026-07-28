@@ -11,7 +11,14 @@ import { Achievement } from './src/engine/storage';
 type Screen =
   | { name: 'home' }
   | { name: 'game'; mode: GameMode }
-  | { name: 'gameover'; score: number; level: number; mode: GameMode; achievements: Achievement[] }
+  | {
+      name: 'gameover';
+      score: number;
+      level: number;
+      mode: GameMode;
+      achievements: Achievement[];
+      isNewRecord: boolean;
+    }
   | { name: 'settings' }
   | { name: 'stats' }
   | { name: 'achievements' };
@@ -34,8 +41,8 @@ export default function App() {
         return (
           <GameScreen
             mode={screen.mode}
-            onGameOver={(score, level, achievements) =>
-              setScreen({ name: 'gameover', score, level, mode: screen.mode, achievements })
+            onGameOver={(score, level, achievements, isNewRecord) =>
+              setScreen({ name: 'gameover', score, level, mode: screen.mode, achievements, isNewRecord })
             }
             onBack={() => setScreen({ name: 'home' })}
           />
@@ -47,6 +54,7 @@ export default function App() {
             level={screen.level}
             mode={screen.mode}
             newAchievements={screen.achievements}
+            isNewRecord={screen.isNewRecord}
             onPlayAgain={() => setScreen({ name: 'game', mode: screen.mode })}
             onHome={() => setScreen({ name: 'home' })}
           />

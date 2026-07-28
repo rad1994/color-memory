@@ -10,6 +10,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { THEME, GameColor } from '../constants/colors';
 import { getMotivationalText } from '../constants/levels';
+import { COLOR_BY_DIRECTION, SwipeDirection } from '../constants/stroop';
 import {
   GameState,
   GameMode,
@@ -19,6 +20,7 @@ import {
 } from '../engine/gameEngine';
 import { saveGameResult, getSettings } from '../engine/storage';
 import { ColorWheel } from '../components/ColorWheel';
+import { SwipePad } from '../components/SwipePad';
 import { Achievement } from '../engine/storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -147,11 +149,12 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
     setState(s => handleInput(s, color));
   }, [state.phase, settings.hapticEnabled]);
 
+  const onSwipe = useCallback((direction: SwipeDirection) => {
+    onColorPress(COLOR_BY_DIRECTION[direction]);
+  }, [onColorPress]);
+
   const getCurrentHighlight = (): string | undefined => {
     if (state.phase !== 'showing' || showingIndex < 0) return undefined;
-    if (mode === 'stroop') {
-      return state.stroopSequence[showingIndex]?.displayColor.id;
-    }
     return state.sequence[showingIndex]?.id;
   };
 
@@ -170,11 +173,8 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
         const item = state.stroopSequence[showingIndex];
         return (
           <View style={styles.displayArea}>
-            <Text style={[styles.stroopEmoji, { color: item.displayColor.hex }]}>
-              {item.object.emoji}
-            </Text>
-            <Text style={[styles.stroopLabel, { color: item.displayColor.hex }]}>
-              {item.object.label}
+            <Text style={[styles.stroopWord, { color: item.ink.hex }]}>
+              {item.word.name}
             </Text>
           </View>
         );
@@ -281,19 +281,27 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
       </Animated.View>
 
       <View style={styles.wheelContainer}>
-        <ColorWheel
-          colors={state.palette}
-          rotation={state.wheelRotation}
-          onPress={onColorPress}
-          disabled={state.phase !== 'input'}
-          highlightedId={getCurrentHighlight()}
-          size={Math.min(SCREEN_WIDTH - 48, 320)}
-        />
+        {mode === 'stroop' ? (
+          <SwipePad
+            onSwipe={onSwipe}
+            disabled={state.phase !== 'input'}
+            size={Math.min(SCREEN_WIDTH - 64, 280)}
+          />
+        ) : (
+          <ColorWheel
+            colors={state.palette}
+            rotation={state.wheelRotation}
+            onPress={onColorPress}
+            disabled={state.phase !== 'input'}
+            highlightedId={getCurrentHighlight()}
+            size={Math.min(SCREEN_WIDTH - 48, 320)}
+          />
+        )}
       </View>
 
-      {mode === 'stroop' && state.phase === 'input' && (
+      {mode === 'stroop' && (
         <Text style={styles.stroopHint}>
-          Remember the DISPLAYED color, not the real one!
+          Swipe the COLOR you saw — not the word you read
         </Text>
       )}
     </Animated.View>
@@ -423,13 +431,10 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.accent,
     borderColor: THEME.accent,
   },
-  stroopEmoji: {
-    fontSize: 64,
-  },
-  stroopLabel: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginTop: 8,
+  stroopWord: {
+    fontSize: 52,
+    fontWeight: '900',
+    letterSpacing: 3,
   },
   motivContainer: {
     position: 'absolute',

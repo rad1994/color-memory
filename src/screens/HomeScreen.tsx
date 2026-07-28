@@ -83,7 +83,7 @@ export function HomeScreen({ onStartGame, onOpenStats, onOpenSettings, onOpenAch
           <Text style={styles.buttonIcon}>🧠</Text>
           <View>
             <Text style={styles.buttonText}>Stroop Mode</Text>
-            <Text style={styles.buttonSub}>Colors lie — trust your eyes!</Text>
+            <Text style={styles.buttonSub}>Swipe the ink, not the word</Text>
           </View>
         </TouchableOpacity>
 

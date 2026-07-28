@@ -11,13 +11,14 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { THEME, GameColor } from '../constants/colors';
 import { getMotivationalText } from '../constants/levels';
-import { COLOR_BY_DIRECTION, SwipeDirection } from '../constants/stroop';
+import { COLOR_BY_DIRECTION, STROOP_COLORS, SwipeDirection } from '../constants/stroop';
 import {
   GameState,
   GameMode,
   createInitialState,
   handleInput,
   advanceLevel,
+  applyHint,
 } from '../engine/gameEngine';
 import { saveGameResult, getSettings, getHighScore, Achievement } from '../engine/storage';
 import { ColorGrid } from '../components/ColorGrid';
@@ -25,6 +26,7 @@ import { SequenceDots } from '../components/SequenceDots';
 import { SwipePad } from '../components/SwipePad';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const HINT_VISIBLE_MS = 1400;
 
 interface Props {
   mode: GameMode;
@@ -41,31 +43,55 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
   const [state, setState] = useState<GameState>(() => createInitialState(mode));
   const [showingIndex, setShowingIndex] = useState(-1);
   const [motivText, setMotivText] = useState('');
+  const [isPaused, setIsPaused] = useState(false);
+  const [hintColor, setHintColor] = useState<GameColor | null>(null);
   const [settings, setSettings] = useState({ soundEnabled: true, hapticEnabled: true, showTutorial: true });
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const scorePopAnim = useRef(new Animated.Value(0)).current;
   const motivAnim = useRef(new Animated.Value(0)).current;
 
+  // A run must only be recorded once, whether it ends by losing every life or
+  // by the player quitting part way through.
+  const savedRef = useRef(false);
+
   useEffect(() => {
     getSettings().then(setSettings);
   }, []);
 
+  const recordRun = useCallback(async (): Promise<{ achievements: Achievement[]; isNewRecord: boolean }> => {
+    if (savedRef.current) return { achievements: [], isNewRecord: false };
+    savedRef.current = true;
+    // Read the old best first, otherwise the score just saved is always the best.
+    const previousBest = await getHighScore(mode);
+    const achievements = await saveGameResult(mode, state.score, state.level, state.bestStreak);
+    return { achievements, isNewRecord: state.score > previousBest };
+  }, [mode, state.score, state.level, state.bestStreak]);
+
+  const quitToMenu = useCallback(async () => {
+    // An abandoned run still counts — it is a game the player played.
+    await recordRun();
+    onBack();
+  }, [recordRun, onBack]);
+
   useEffect(() => {
+    if (isPaused) return;
     if (state.phase === 'ready') {
       const timer = setTimeout(() => {
         setState(s => ({ ...s, phase: 'showing' }));
       }, 800);
       return () => clearTimeout(timer);
     }
-  }, [state.phase, state.level]);
+  }, [state.phase, state.level, isPaused]);
 
+  // Pausing tears this down and unpausing re-runs it, so the sequence replays
+  // from the start rather than resuming mid-way through a half-seen pattern.
   useEffect(() => {
-    if (state.phase !== 'showing') return;
+    if (isPaused || state.phase !== 'showing') return;
 
     const totalItems = mode === 'stroop' ? state.stroopSequence.length : state.sequence.length;
     let current = 0;
-    let timers: ReturnType<typeof setTimeout>[] = [];
+    const timers: ReturnType<typeof setTimeout>[] = [];
 
     setShowingIndex(-1);
 
@@ -88,10 +114,11 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
 
     timers.push(setTimeout(showNext, 400));
     return () => timers.forEach(clearTimeout);
-  }, [state.phase, state.level]);
+  }, [state.phase, state.level, isPaused]);
 
   useEffect(() => {
     if (state.phase === 'success') {
+      setHintColor(null);
       setMotivText(getMotivationalText(state.level, state.streak));
       Animated.sequence([
         Animated.timing(motivAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
@@ -114,6 +141,7 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
 
   useEffect(() => {
     if (state.phase === 'fail') {
+      setHintColor(null);
       Animated.sequence([
         Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
         Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
@@ -134,14 +162,11 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
 
   useEffect(() => {
     if (state.phase === 'gameover') {
-      // Read the old best before saving, otherwise the just-saved score is the best.
-      (async () => {
-        const previousBest = await getHighScore(mode);
-        const newAchievements = await saveGameResult(mode, state.score, state.level, state.bestStreak);
+      recordRun().then(({ achievements, isNewRecord }) => {
         setTimeout(() => {
-          onGameOver(state.score, state.level, newAchievements, state.score > previousBest);
+          onGameOver(state.score, state.level, achievements, isNewRecord);
         }, 500);
-      })();
+      });
       if (settings.hapticEnabled) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       }
@@ -149,25 +174,44 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
   }, [state.phase === 'gameover']);
 
   const onColorPress = useCallback((color: GameColor) => {
-    if (state.phase !== 'input') return;
+    if (state.phase !== 'input' || isPaused) return;
 
     if (settings.hapticEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     }
 
+    setHintColor(null);
     setState(s => handleInput(s, color));
-  }, [state.phase, settings.hapticEnabled]);
+  }, [state.phase, isPaused, settings.hapticEnabled]);
 
   const onSwipe = useCallback((direction: SwipeDirection) => {
     onColorPress(COLOR_BY_DIRECTION[direction]);
   }, [onColorPress]);
 
-  const isShowing = state.phase === 'showing';
+  const onHint = useCallback(() => {
+    if (state.phase !== 'input' || isPaused || state.hintsRemaining <= 0) return;
+    const { state: next, revealed } = applyHint(state);
+    if (!revealed) return;
+    setState(next);
+    setHintColor(revealed);
+    setTimeout(() => setHintColor(null), HINT_VISIBLE_MS);
+    if (settings.hapticEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+  }, [state, isPaused, settings.hapticEnabled]);
+
+  const isShowing = state.phase === 'showing' && !isPaused;
+  const canHint = state.phase === 'input' && !isPaused && state.hintsRemaining > 0;
   const dotSequence = mode === 'stroop'
     ? state.stroopSequence.map(item => item.ink)
     : state.sequence;
 
+  const hintDirection = hintColor
+    ? STROOP_COLORS.find(c => c.id === hintColor.id)?.direction ?? null
+    : null;
+
   const caption = () => {
+    if (isPaused) return '';
     switch (state.phase) {
       case 'ready':   return 'GET READY';
       case 'showing': return 'MEMORIZE THE SEQUENCE';
@@ -177,27 +221,21 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
     }
   };
 
-  const renderStroopWord = () => {
-    const item = isShowing && showingIndex >= 0 ? state.stroopSequence[showingIndex] : null;
-    return (
-      <View style={styles.wordArea}>
-        {item && (
-          <Text style={[styles.stroopWord, { color: item.ink.hex }]}>{item.word.name}</Text>
-        )}
-      </View>
-    );
-  };
-
   return (
     <Animated.View style={[styles.container, { transform: [{ translateX: shakeAnim }] }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.iconButton} activeOpacity={0.7}>
+        <TouchableOpacity onPress={quitToMenu} style={styles.iconButton} activeOpacity={0.7}>
           <Ionicons name="arrow-back" size={22} color={THEME.text} />
         </TouchableOpacity>
         <Text style={styles.levelTitle}>LEVEL {state.level}</Text>
-        <View style={styles.iconButton}>
+        <TouchableOpacity
+          onPress={() => setIsPaused(true)}
+          style={styles.iconButton}
+          activeOpacity={0.7}
+          disabled={state.phase === 'gameover'}
+        >
           <Ionicons name="pause" size={20} color={THEME.text} />
-        </View>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.statusRow}>
@@ -234,28 +272,55 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
         />
       </View>
 
-      {mode === 'stroop' && renderStroopWord()}
+      {mode === 'stroop' && (
+        <View style={styles.wordArea}>
+          {isShowing && showingIndex >= 0 && state.stroopSequence[showingIndex] && (
+            <Text style={[styles.stroopWord, { color: state.stroopSequence[showingIndex].ink.hex }]}>
+              {state.stroopSequence[showingIndex].word.name}
+            </Text>
+          )}
+        </View>
+      )}
 
       <View style={styles.playArea}>
         {mode === 'stroop' ? (
           <SwipePad
             onSwipe={onSwipe}
-            disabled={state.phase !== 'input'}
+            disabled={state.phase !== 'input' || isPaused}
             size={Math.min(SCREEN_WIDTH - 72, 260)}
+            hintDirection={hintDirection}
           />
         ) : (
           <ColorGrid
             colors={state.palette}
             onPress={onColorPress}
-            disabled={state.phase !== 'input'}
+            disabled={state.phase !== 'input' || isPaused}
             highlightedId={showingIndex >= 0 ? state.sequence[showingIndex]?.id : undefined}
+            hintedId={hintColor?.id}
             isShowing={isShowing}
             width={Math.min(SCREEN_WIDTH - 48, 320)}
           />
         )}
       </View>
 
-      <Text style={styles.caption}>{caption()}</Text>
+      <View style={styles.footer}>
+        <TouchableOpacity
+          onPress={onHint}
+          disabled={!canHint}
+          activeOpacity={0.8}
+          style={[styles.hintButton, !canHint && styles.hintButtonOff]}
+        >
+          <Ionicons
+            name="bulb"
+            size={18}
+            color={canHint ? THEME.warning : THEME.textDim}
+          />
+          <Text style={[styles.hintLabel, !canHint && styles.hintLabelOff]}>
+            HINT ×{state.hintsRemaining}
+          </Text>
+        </TouchableOpacity>
+        <Text style={styles.caption}>{caption()}</Text>
+      </View>
 
       <Animated.View
         pointerEvents="none"
@@ -269,6 +334,31 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
       >
         <Text style={styles.motivText}>{motivText}</Text>
       </Animated.View>
+
+      {isPaused && (
+        <View style={styles.pauseOverlay}>
+          <View style={styles.pauseCard}>
+            <Ionicons name="pause-circle" size={52} color={THEME.accent} />
+            <Text style={styles.pauseTitle}>PAUSED</Text>
+            {(state.phase === 'showing' || state.phase === 'ready') && (
+              <Text style={styles.pauseNote}>The sequence replays when you resume</Text>
+            )}
+
+            <TouchableOpacity
+              style={styles.resumeButton}
+              onPress={() => setIsPaused(false)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="play" size={18} color={THEME.text} />
+              <Text style={styles.resumeLabel}>RESUME</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.quitButton} onPress={quitToMenu} activeOpacity={0.85}>
+              <Text style={styles.quitLabel}>QUIT</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </Animated.View>
   );
 }
@@ -348,13 +438,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  footer: {
+    alignItems: 'center',
+    paddingBottom: 30,
+    gap: 14,
+  },
+  hintButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: THEME.bgLight,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  hintButtonOff: {
+    opacity: 0.4,
+  },
+  hintLabel: {
+    color: THEME.warning,
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  hintLabelOff: {
+    color: THEME.textDim,
+  },
   caption: {
     textAlign: 'center',
     color: THEME.textDim,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 1.5,
-    paddingBottom: 34,
+    minHeight: 16,
   },
   motivOverlay: {
     position: 'absolute',
@@ -365,6 +481,67 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: '900',
     color: THEME.warning,
+    textAlign: 'center',
+  },
+  pauseOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(10,10,15,0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 30,
+  },
+  pauseCard: {
+    width: '100%',
+    maxWidth: 300,
+    backgroundColor: THEME.bgCard,
+    borderRadius: 20,
+    padding: 26,
+    alignItems: 'center',
+  },
+  pauseTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: THEME.text,
+    letterSpacing: 3,
+    marginTop: 10,
+  },
+  pauseNote: {
+    fontSize: 12,
+    color: THEME.textDim,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  resumeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    alignSelf: 'stretch',
+    backgroundColor: THEME.accent,
+    paddingVertical: 15,
+    borderRadius: 13,
+    marginTop: 22,
+  },
+  resumeLabel: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: THEME.text,
+    letterSpacing: 1.2,
+  },
+  quitButton: {
+    alignSelf: 'stretch',
+    paddingVertical: 13,
+    marginTop: 6,
+  },
+  quitLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: THEME.textDim,
+    letterSpacing: 1.2,
     textAlign: 'center',
   },
 });

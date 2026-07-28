@@ -8,9 +8,10 @@ interface TileProps {
   onPress: (color: GameColor) => void;
   disabled?: boolean;
   highlighted?: boolean;
+  hinted?: boolean;
 }
 
-function ColorTile({ color, size, onPress, disabled, highlighted }: TileProps) {
+function ColorTile({ color, size, onPress, disabled, highlighted, hinted }: TileProps) {
   const scale = useRef(new Animated.Value(1)).current;
 
   const animateTo = (toValue: number) =>
@@ -36,6 +37,7 @@ function ColorTile({ color, size, onPress, disabled, highlighted }: TileProps) {
             shadowRadius: highlighted ? 24 : 0,
             elevation: highlighted ? 16 : 0,
           },
+          hinted && styles.hinted,
         ]}
       />
     </Animated.View>
@@ -47,11 +49,20 @@ interface Props {
   onPress: (color: GameColor) => void;
   disabled?: boolean;
   highlightedId?: string;
+  hintedId?: string;
   isShowing?: boolean;
   width: number;
 }
 
-export function ColorGrid({ colors, onPress, disabled, highlightedId, isShowing, width }: Props) {
+export function ColorGrid({
+  colors,
+  onPress,
+  disabled,
+  highlightedId,
+  hintedId,
+  isShowing,
+  width,
+}: Props) {
   const columns = colors.length <= 4 ? 2 : colors.length <= 6 ? 2 : 2;
   const rows = Math.ceil(colors.length / columns);
   const gap = 12;
@@ -67,6 +78,7 @@ export function ColorGrid({ colors, onPress, disabled, highlightedId, isShowing,
           onPress={onPress}
           disabled={disabled}
           highlighted={isShowing ? highlightedId === color.id : undefined}
+          hinted={hintedId === color.id}
         />
       ))}
     </View>
@@ -81,5 +93,9 @@ const styles = StyleSheet.create({
   },
   tile: {
     borderRadius: 18,
+  },
+  hinted: {
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
   },
 });

@@ -24,6 +24,25 @@ export interface GameState {
   phase: 'ready' | 'showing' | 'input' | 'success' | 'fail' | 'gameover';
   inputIndex: number;
   wheelRotation: number;
+  hintsRemaining: number;
+}
+
+// Free hints per run for now; the plan is to buy these with collected coins,
+// so the count lives in game state rather than being hardcoded in the UI.
+export const HINTS_PER_GAME = 3;
+
+// The color the player is expected to answer next, or null outside the input phase.
+export function expectedColor(state: GameState): GameColor | null {
+  if (state.phase !== 'input') return null;
+  return state.mode === 'stroop'
+    ? state.stroopSequence[state.inputIndex]?.ink ?? null
+    : state.sequence[state.inputIndex] ?? null;
+}
+
+export function applyHint(state: GameState): { state: GameState; revealed: GameColor | null } {
+  const revealed = expectedColor(state);
+  if (!revealed || state.hintsRemaining <= 0) return { state, revealed: null };
+  return { state: { ...state, hintsRemaining: state.hintsRemaining - 1 }, revealed };
 }
 
 // Stroop mode always plays on the fixed four-color direction pad, so the
@@ -52,6 +71,7 @@ export function createInitialState(mode: GameMode): GameState {
     phase: 'ready',
     inputIndex: 0,
     wheelRotation: 0,
+    hintsRemaining: HINTS_PER_GAME,
   };
 }
 

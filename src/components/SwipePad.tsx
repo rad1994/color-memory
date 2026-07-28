@@ -16,9 +16,10 @@ interface Props {
   onSwipe: (direction: SwipeDirection) => void;
   disabled?: boolean;
   size: number;
+  hintDirection?: SwipeDirection | null;
 }
 
-export function SwipePad({ onSwipe, disabled, size }: Props) {
+export function SwipePad({ onSwipe, disabled, size, hintDirection }: Props) {
   const [activeDirection, setActiveDirection] = useState<SwipeDirection | null>(null);
 
   // The pan responder is created once, so it would otherwise close over the
@@ -70,6 +71,7 @@ export function SwipePad({ onSwipe, disabled, size }: Props) {
   const badge = (direction: SwipeDirection, positionStyle: object) => {
     const color = STROOP_COLORS.find(c => c.direction === direction)!;
     const isActive = activeDirection === direction;
+    const isHinted = hintDirection === direction;
     return (
       <Pressable
         onPress={() => trigger(direction)}
@@ -79,9 +81,10 @@ export function SwipePad({ onSwipe, disabled, size }: Props) {
           positionStyle,
           {
             backgroundColor: color.hex,
-            opacity: disabled ? 0.35 : isActive ? 1 : 0.9,
-            transform: [{ scale: isActive ? 1.22 : 1 }],
+            opacity: disabled ? 0.35 : isActive || isHinted ? 1 : 0.9,
+            transform: [{ scale: isActive || isHinted ? 1.22 : 1 }],
           },
+          isHinted && styles.hinted,
         ]}
       >
         <Text style={styles.arrow}>{color.arrow}</Text>
@@ -125,6 +128,10 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '900',
     color: 'rgba(255,255,255,0.95)',
+  },
+  hinted: {
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
   },
   hint: {
     color: THEME.textDim,

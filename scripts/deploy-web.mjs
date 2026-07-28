@@ -1,30 +1,28 @@
 import { execSync } from 'node:child_process';
-import { readFileSync, writeFileSync, copyFileSync } from 'node:fs';
+import { writeFileSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const OUT_DIR = 'web-dist';
-const BASE_PATH = '/color-memory/';
 
+// The subdirectory prefix is baked in by expo.experiments.baseUrl in app.json,
+// which covers assets fetched at runtime (the icon font) as well as the script
+// tag. Do not rewrite paths here — a <base> tag cannot fix the absolute URLs
+// the bundle builds for those assets, and stripping their leading slash only
+// produces a doubled "/color-memory/color-memory/" path.
 execSync(`npx expo export --platform web --output-dir ${OUT_DIR}`, { stdio: 'inherit' });
-
-const indexPath = join(OUT_DIR, 'index.html');
-let html = readFileSync(indexPath, 'utf8');
-
-// GitHub Pages serves the app from a subdirectory, so absolute "/..." paths
-// resolve to the domain root and 404. Make asset references relative, then
-// anchor them with <base>. Order matters: inserting <base> first would let the
-// rewrite strip its own leading slash, leaving a doubled "/color-memory/color-memory/" path.
-html = html.replace(/(src|href)="\/(?!\/)/g, '$1="');
-if (!html.includes('<base ')) {
-  html = html.replace('<meta charset="utf-8" />', `<meta charset="utf-8" />\n    <base href="${BASE_PATH}" />`);
-}
-writeFileSync(indexPath, html);
 
 // Jekyll strips directories beginning with "_" (killing _expo/), and gh-pages
 // skips dotfiles unless --dotfiles is passed — both are required here.
 writeFileSync(join(OUT_DIR, '.nojekyll'), '');
-copyFileSync(indexPath, join(OUT_DIR, '404.html'));
+copyFileSync(join(OUT_DIR, 'index.html'), join(OUT_DIR, '404.html'));
+
+// gh-pages stages the published files inside a git clone, so any .gitignore
+// left on the branch still applies. The project's own ignore rules include
+// node_modules/, and Expo emits the icon fonts under assets/node_modules/ —
+// which silently dropped them and rendered every icon as an empty box. Shipping
+// an empty ignore file overwrites whatever the branch is carrying.
+writeFileSync(join(OUT_DIR, '.gitignore'), '');
 
 execSync(`npx gh-pages -d ${OUT_DIR} --dotfiles`, { stdio: 'inherit' });
 
-console.log(`\nDeployed: https://rad1994.github.io${BASE_PATH}`);
+console.log('\nDeployed: https://rad1994.github.io/color-memory/');

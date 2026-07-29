@@ -30,9 +30,12 @@ const MAX_SEQUENCE = 15;
 const MIN_DISPLAY = 240;
 const MIN_GAP = 80;
 
-// New mechanics arrive at the levels called out in the design sheet.
-export const ROTATE_FROM_LEVEL = 29;
-export const FAKE_FLASH_FROM_LEVEL = 31;
+// The design sheet illustrates these mechanics with level 29 and 31 screenshots,
+// but gating them there makes them dead content: with three lives, almost nobody
+// reaches level 29, so the signature twists would never actually be seen. They
+// unlock early enough that a single session meets both.
+export const ROTATE_FROM_LEVEL = 6;
+export const FAKE_FLASH_FROM_LEVEL = 12;
 
 export function getLevelConfig(level: number): LevelConfig {
   return {
@@ -45,7 +48,7 @@ export function getLevelConfig(level: number): LevelConfig {
     fakeFlashes:
       level < FAKE_FLASH_FROM_LEVEL
         ? 0
-        : Math.min(3, 1 + Math.floor((level - FAKE_FLASH_FROM_LEVEL) / 20)),
+        : Math.min(3, 1 + Math.floor((level - FAKE_FLASH_FROM_LEVEL) / 12)),
   };
 }
 

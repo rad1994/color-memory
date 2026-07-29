@@ -31,12 +31,16 @@ export interface GameState {
 // so the count lives in game state rather than being hardcoded in the UI.
 export const HINTS_PER_GAME = 3;
 
+function expectedColorAt(state: GameState, index: number): GameColor | null {
+  return state.mode === 'stroop'
+    ? state.stroopSequence[index]?.ink ?? null
+    : state.sequence[index] ?? null;
+}
+
 // The color the player is expected to answer next, or null outside the input phase.
 export function expectedColor(state: GameState): GameColor | null {
   if (state.phase !== 'input') return null;
-  return state.mode === 'stroop'
-    ? state.stroopSequence[state.inputIndex]?.ink ?? null
-    : state.sequence[state.inputIndex] ?? null;
+  return expectedColorAt(state, state.inputIndex);
 }
 
 export function applyHint(state: GameState): { state: GameState; revealed: GameColor | null } {
@@ -45,10 +49,25 @@ export function applyHint(state: GameState): { state: GameState; revealed: GameC
   return { state: { ...state, hintsRemaining: state.hintsRemaining - 1 }, revealed };
 }
 
+function shuffled<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 // Stroop mode always plays on the fixed four-color direction pad, so the
-// palette never grows with the level the way it does in classic mode.
+// palette never grows with the level the way it does in classic mode — and its
+// order must never move, since the whole mode rests on a stable color-to-
+// direction mapping.
 function paletteFor(mode: GameMode, levelConfig: LevelConfig): GameColor[] {
-  return mode === 'stroop' ? STROOP_COLORS : GAME_COLORS.slice(0, levelConfig.paletteSize);
+  if (mode === 'stroop') return STROOP_COLORS;
+  const palette = GAME_COLORS.slice(0, levelConfig.paletteSize);
+  // Board order drives tile position, so shuffling it forces the player to
+  // recall the color itself instead of where it sat last level.
+  return levelConfig.shuffleBoard ? shuffled(palette) : palette;
 }
 
 export function createInitialState(mode: GameMode): GameState {
@@ -127,9 +146,10 @@ export function advanceLevel(state: GameState): GameState {
 }
 
 export function handleInput(state: GameState, selectedColor: GameColor): GameState {
-  const expectedColor = state.mode === 'stroop'
-    ? state.stroopSequence[state.inputIndex].ink
-    : state.sequence[state.inputIndex];
+  const expectedColor = expectedColorAt(state, state.inputIndex);
+  // Past the end of the sequence there is nothing to judge; treat the input as
+  // a no-op rather than reading undefined off the end of the array.
+  if (!expectedColor) return state;
 
   if (selectedColor.id !== expectedColor.id) {
     const newLives = state.lives - 1;

@@ -51,9 +51,11 @@ export function SwipePad({ onSwipe, disabled, size, hintDirection }: Props) {
 
   const responder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      // Claiming the responder on touch start would swallow taps meant for the
+      // badges, so only an actual drag becomes a swipe.
+      onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gesture) =>
-        Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4,
+        Math.abs(gesture.dx) > 6 || Math.abs(gesture.dy) > 6,
       onPanResponderRelease: (_, gesture) => {
         const { dx, dy } = gesture;
         if (Math.abs(dx) < SWIPE_THRESHOLD && Math.abs(dy) < SWIPE_THRESHOLD) return;

@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { THEME, GameColor } from '../constants/colors';
-import { getMotivationalText } from '../constants/levels';
+import { getMotivationalText, getTierName, getLevelMilestone } from '../constants/levels';
 import { COLOR_BY_DIRECTION, STROOP_COLORS, SwipeDirection } from '../constants/stroop';
 import {
   GameState,
@@ -108,7 +108,7 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
       current++;
       timers.push(setTimeout(() => {
         setShowingIndex(-1);
-        timers.push(setTimeout(showNext, 200));
+        timers.push(setTimeout(showNext, state.levelConfig.gapTime));
       }, state.levelConfig.displayTime));
     };
 
@@ -174,15 +174,20 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
   }, [state.phase === 'gameover']);
 
   const onColorPress = useCallback((color: GameColor) => {
-    if (state.phase !== 'input' || isPaused) return;
+    if (isPaused) return;
 
     if (settings.hapticEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     }
 
     setHintColor(null);
-    setState(s => handleInput(s, color));
-  }, [state.phase, isPaused, settings.hapticEnabled]);
+    // The phase must be re-checked against the latest state, not the render
+    // closure: two taps landing in the same frame would otherwise both pass a
+    // stale "input" check, and the second would be judged against the position
+    // the first already advanced past — a wrong answer, and a life lost, for
+    // input the player never got wrong.
+    setState(s => (s.phase === 'input' ? handleInput(s, color) : s));
+  }, [isPaused, settings.hapticEnabled]);
 
   const onSwipe = useCallback((direction: SwipeDirection) => {
     onColorPress(COLOR_BY_DIRECTION[direction]);
@@ -213,7 +218,7 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
   const caption = () => {
     if (isPaused) return '';
     switch (state.phase) {
-      case 'ready':   return 'GET READY';
+      case 'ready':   return getLevelMilestone(state.level) ?? 'GET READY';
       case 'showing': return 'MEMORIZE THE SEQUENCE';
       case 'input':   return mode === 'stroop' ? 'ANSWER THE COLOR, NOT THE WORD' : 'YOUR TURN';
       case 'fail':    return 'WRONG — TRY AGAIN';
@@ -261,6 +266,9 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
       </View>
 
       <View style={styles.statusRow}>
+        <View style={styles.tierPill}>
+          <Text style={styles.tierText}>{getTierName(state.level)}</Text>
+        </View>
         <View style={styles.lives}>
           {Array.from({ length: 3 }).map((_, i) => (
             <Ionicons
@@ -433,6 +441,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 14,
     paddingTop: 18,
+  },
+  tierPill: {
+    backgroundColor: THEME.bgElevated,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  tierText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: THEME.textDim,
+    letterSpacing: 1.5,
   },
   lives: {
     flexDirection: 'row',

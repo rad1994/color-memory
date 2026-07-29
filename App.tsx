@@ -33,6 +33,7 @@ export default function App() {
         return (
           <HomeScreen
             onStartGame={(mode) => setScreen({ name: 'game', mode, seed: null })}
+            key="home"
             onStartDaily={() =>
               setScreen({ name: 'game', mode: 'daily', seed: seedForDate(todayKey()) })
             }

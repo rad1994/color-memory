@@ -5,21 +5,38 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME, GAME_COLORS } from '../constants/colors';
 import { getAllStats, getDailyStatus, DailyStatus } from '../engine/storage';
 import { useTheme } from '../theme/ThemeContext';
 
+type PlayableMode = 'classic' | 'reversed' | 'stroop';
+
 interface Props {
-  onStartGame: (mode: 'classic' | 'stroop') => void;
+  onStartGame: (mode: PlayableMode) => void;
   onStartDaily: () => void;
   onOpenStats: () => void;
   onOpenSettings: () => void;
   onOpenAchievements: () => void;
 }
 
-const LOGO_TILES = ['red', 'green', 'blue', 'yellow'];
+interface ModeCard {
+  mode: PlayableMode | 'locked';
+  title: string;
+  blurb: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  colorId: string;
+}
+
+const MODES: ModeCard[] = [
+  { mode: 'classic',  title: 'CLASSIC',      blurb: 'Repeat the color sequence',   icon: 'play',           colorId: 'cyan' },
+  { mode: 'reversed', title: 'REVERSED',     blurb: 'Repeat it backwards',         icon: 'swap-horizontal', colorId: 'orange' },
+  { mode: 'stroop',   title: 'STROOP',       blurb: 'The color, not the word',     icon: 'color-palette',  colorId: 'purple' },
+  { mode: 'locked',   title: 'DUAL MEMORY',  blurb: 'Colors and sounds at once',   icon: 'musical-notes',  colorId: 'green' },
+  { mode: 'locked',   title: 'CHALLENGE',    blurb: 'Timed precision trials',      icon: 'lock-closed',    colorId: 'pink' },
+];
 
 export function HomeScreen({
   onStartGame,
@@ -29,107 +46,95 @@ export function HomeScreen({
   onOpenAchievements,
 }: Props) {
   const { hexFor } = useTheme();
-  const [stats, setStats] = useState({ classicHigh: 0, stroopHigh: 0 });
+  const [best, setBest] = useState(0);
   const [daily, setDaily] = useState<DailyStatus | null>(null);
 
-  const scale = useRef(new Animated.Value(0.85)).current;
   const fade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    getAllStats().then(s => setStats({ classicHigh: s.classicHigh, stroopHigh: s.stroopHigh }));
+    getAllStats().then(s => setBest(Math.max(s.classicHigh, s.stroopHigh, s.dailyHigh)));
     getDailyStatus().then(setDaily);
-    Animated.parallel([
-      Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 9 }),
-      Animated.timing(fade, { toValue: 1, duration: 500, useNativeDriver: true }),
-    ]).start();
+    Animated.timing(fade, { toValue: 1, duration: 500, useNativeDriver: true }).start();
   }, []);
 
-  const bestScore = Math.max(stats.classicHigh, stats.stroopHigh);
   const playedToday = daily?.playedToday ?? false;
 
   return (
-    <View style={styles.container}>
-      <Animated.View style={[styles.logoBlock, { opacity: fade, transform: [{ scale }] }]}>
-        <View style={styles.logoCard}>
-          <View style={styles.logoGrid}>
-            {LOGO_TILES.map(id => (
-              <View key={id} style={[styles.logoTile, { backgroundColor: hexFor(id) }]} />
-            ))}
-          </View>
-        </View>
-
-        <Text style={styles.wordmarkTop}>MEMORY</Text>
-        <View style={styles.wordmarkRow}>
-          {'COLORS'.split('').map((letter, i) => (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Animated.View style={{ opacity: fade }}>
+        <Text style={styles.neon}>NEON</Text>
+        <View style={styles.nexusRow}>
+          {'NEXUS'.split('').map((letter, i) => (
             <Text
               key={i}
-              style={[styles.wordmarkLetter, { color: hexFor(GAME_COLORS[i % GAME_COLORS.length].id) }]}
+              style={[styles.nexusLetter, { color: hexFor(GAME_COLORS[(i + 4) % GAME_COLORS.length].id) }]}
             >
               {letter}
             </Text>
           ))}
         </View>
-
-        {bestScore > 0 && <Text style={styles.best}>BEST {bestScore.toLocaleString()}</Text>}
+        <Text style={styles.subtitle}>MEMORY COLOUR</Text>
+        {best > 0 && <Text style={styles.best}>BEST {best.toLocaleString()}</Text>}
       </Animated.View>
 
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.primaryButton, { backgroundColor: THEME.accent }]}
-          onPress={() => onStartGame('classic')}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="play" size={20} color={THEME.text} />
-          <Text style={styles.primaryLabel}>PLAY</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.primaryButton,
-            { backgroundColor: THEME.success },
-            playedToday && styles.buttonDone,
-          ]}
-          onPress={onStartDaily}
-          disabled={playedToday}
-          activeOpacity={0.85}
-        >
-          <Ionicons
-            name={playedToday ? 'checkmark-circle' : 'calendar'}
-            size={20}
-            color={THEME.text}
-          />
-          <View style={styles.dailyLabels}>
-            <Text style={styles.primaryLabel}>DAILY CHALLENGE</Text>
-            <Text style={styles.dailySub}>
-              {playedToday
-                ? `Done today — ${daily?.lastScore.toLocaleString()} pts`
-                : 'Same puzzle for everyone today'}
-            </Text>
-          </View>
-          {!!daily?.streak && (
-            <View style={styles.streakChip}>
-              <Ionicons name="flame" size={12} color={THEME.warning} />
-              <Text style={styles.streakChipText}>{daily.streak}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.primaryButton, { backgroundColor: THEME.purple }]}
-          onPress={() => onStartGame('stroop')}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="color-palette" size={20} color={THEME.text} />
-          <Text style={styles.primaryLabel}>STROOP MODE</Text>
-        </TouchableOpacity>
-
-        <View style={styles.iconRow}>
-          <IconAction icon="stats-chart" label="STATS" onPress={onOpenStats} />
-          <IconAction icon="trophy" label="SCORES" onPress={onOpenAchievements} />
-          <IconAction icon="settings-sharp" label="SETTINGS" onPress={onOpenSettings} />
+      <TouchableOpacity
+        style={[styles.daily, playedToday && styles.dailyDone]}
+        onPress={onStartDaily}
+        disabled={playedToday}
+        activeOpacity={0.85}
+      >
+        <Ionicons
+          name={playedToday ? 'checkmark-circle' : 'gift'}
+          size={22}
+          color={playedToday ? THEME.textDim : THEME.warning}
+        />
+        <View style={styles.dailyLabels}>
+          <Text style={styles.dailyTitle}>DAILY CHALLENGE</Text>
+          <Text style={styles.dailyBlurb}>
+            {playedToday
+              ? `Done today — ${daily?.lastScore.toLocaleString()} pts`
+              : 'Same puzzle for everyone today'}
+          </Text>
         </View>
+        {!!daily?.streak && (
+          <View style={styles.streakChip}>
+            <Ionicons name="flame" size={11} color={THEME.warning} />
+            <Text style={styles.streakText}>{daily.streak}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
+      <Text style={styles.sectionTitle}>GAME MODES</Text>
+
+      {MODES.map(card => {
+        const locked = card.mode === 'locked';
+        const accent = hexFor(card.colorId);
+        return (
+          <TouchableOpacity
+            key={card.title}
+            style={[styles.modeCard, { borderColor: locked ? THEME.border : accent + '66' }, locked && styles.modeLocked]}
+            onPress={() => !locked && onStartGame(card.mode as PlayableMode)}
+            disabled={locked}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.modeIcon, { backgroundColor: locked ? THEME.bgElevated : accent + '22' }]}>
+              <Ionicons name={card.icon} size={19} color={locked ? THEME.textDim : accent} />
+            </View>
+            <View style={styles.modeLabels}>
+              <Text style={[styles.modeTitle, locked && styles.lockedText]}>{card.title}</Text>
+              <Text style={styles.modeBlurb}>{locked ? 'Coming soon' : card.blurb}</Text>
+            </View>
+            {!locked && <Ionicons name="chevron-forward" size={17} color={THEME.textDim} />}
+          </TouchableOpacity>
+        );
+      })}
+
+      <View style={styles.iconRow}>
+        <IconAction icon="stats-chart" label="STATS" onPress={onOpenStats} />
+        <IconAction icon="trophy" label="AWARDS" onPress={onOpenAchievements} />
+        <IconAction icon="settings-sharp" label="SETTINGS" onPress={onOpenSettings} />
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -145,7 +150,7 @@ function IconAction({
   return (
     <TouchableOpacity style={styles.iconAction} onPress={onPress} activeOpacity={0.8}>
       <View style={styles.iconTile}>
-        <Ionicons name={icon} size={22} color={THEME.text} />
+        <Ionicons name={icon} size={20} color={THEME.text} />
       </View>
       <Text style={styles.iconLabel}>{label}</Text>
     </TouchableOpacity>
@@ -153,127 +158,117 @@ function IconAction({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: THEME.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-  },
-  logoBlock: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  logoCard: {
-    width: 118,
-    height: 118,
-    borderRadius: 28,
-    backgroundColor: THEME.bgLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoGrid: {
-    width: 86,
-    height: 86,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 7,
-  },
-  logoTile: {
-    width: 39,
-    height: 39,
-    borderRadius: 10,
-  },
-  wordmarkTop: {
-    fontSize: 32,
+  container: { flex: 1, backgroundColor: THEME.bg },
+  content: { paddingTop: 62, paddingHorizontal: 22, paddingBottom: 40 },
+  neon: {
+    fontSize: 44,
     fontWeight: '900',
     color: THEME.text,
-    letterSpacing: 5,
-    marginTop: 20,
+    letterSpacing: 6,
   },
-  wordmarkRow: {
-    flexDirection: 'row',
-    marginTop: 2,
-  },
-  wordmarkLetter: {
-    fontSize: 28,
-    fontWeight: '900',
+  nexusRow: { flexDirection: 'row', marginTop: -6 },
+  nexusLetter: { fontSize: 44, fontWeight: '900', letterSpacing: 6 },
+  subtitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: THEME.textDim,
     letterSpacing: 5,
+    marginTop: 6,
   },
   best: {
-    marginTop: 14,
-    color: THEME.textDim,
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '800',
+    color: THEME.warning,
     letterSpacing: 2,
+    marginTop: 10,
   },
-  actions: {
-    width: '100%',
-    maxWidth: 340,
-  },
-  primaryButton: {
+  daily: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 15,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    marginBottom: 11,
+    gap: 12,
+    backgroundColor: THEME.bgCard,
+    borderWidth: 1,
+    borderColor: 'rgba(255,212,38,0.35)',
+    borderRadius: 15,
+    padding: 15,
+    marginTop: 26,
   },
-  buttonDone: {
-    opacity: 0.45,
-  },
-  primaryLabel: {
-    fontSize: 15,
-    fontWeight: '800',
+  dailyDone: { opacity: 0.5, borderColor: THEME.border },
+  dailyLabels: { flex: 1 },
+  dailyTitle: {
+    fontSize: 13,
+    fontWeight: '900',
     color: THEME.text,
     letterSpacing: 1.4,
   },
-  dailyLabels: {
-    flex: 1,
-  },
-  dailySub: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.75)',
-    marginTop: 2,
-  },
+  dailyBlurb: { fontSize: 11, color: THEME.textDim, marginTop: 2 },
   streakChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: 'rgba(0,0,0,0.28)',
+    backgroundColor: 'rgba(255,212,38,0.14)',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 9,
+    borderRadius: 8,
   },
-  streakChipText: {
-    color: THEME.warning,
+  streakText: { color: THEME.warning, fontWeight: '900', fontSize: 11 },
+  sectionTitle: {
+    fontSize: 10,
     fontWeight: '900',
-    fontSize: 12,
+    color: THEME.textDim,
+    letterSpacing: 2.5,
+    marginTop: 26,
+    marginBottom: 12,
+    marginLeft: 2,
   },
+  modeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+    backgroundColor: THEME.bgCard,
+    borderWidth: 1,
+    borderRadius: 15,
+    padding: 14,
+    marginBottom: 10,
+  },
+  modeLocked: { opacity: 0.45 },
+  modeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modeLabels: { flex: 1 },
+  modeTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: THEME.text,
+    letterSpacing: 1.4,
+  },
+  lockedText: { color: THEME.textDim },
+  modeBlurb: { fontSize: 11, color: THEME.textDim, marginTop: 2 },
   iconRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 14,
-    marginTop: 12,
+    marginTop: 20,
   },
-  iconAction: {
-    alignItems: 'center',
-    gap: 7,
-  },
+  iconAction: { alignItems: 'center', gap: 6 },
   iconTile: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: THEME.bgLight,
+    width: 54,
+    height: 54,
+    borderRadius: 15,
+    backgroundColor: THEME.bgCard,
+    borderWidth: 1,
+    borderColor: THEME.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
   iconLabel: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 9,
+    fontWeight: '800',
     color: THEME.textDim,
-    letterSpacing: 1,
+    letterSpacing: 1.2,
   },
 });

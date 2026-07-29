@@ -2,8 +2,10 @@ export interface LevelConfig {
   sequenceLength: number;
   displayTime: number; // ms each color stays lit
   gapTime: number;     // ms of darkness between colors
+  answerTime: number;  // ms allowed per answer once it is the player's turn
   paletteSize: number;
-  shuffleBoard: boolean;
+  rotates: boolean;      // the ring turns between levels
+  fakeFlashes: number;   // decoy flashes mixed into playback
 }
 
 export interface Tier {
@@ -28,15 +30,22 @@ const MAX_SEQUENCE = 15;
 const MIN_DISPLAY = 240;
 const MIN_GAP = 80;
 
-export const SHUFFLE_FROM_LEVEL = 26;
+// New mechanics arrive at the levels called out in the design sheet.
+export const ROTATE_FROM_LEVEL = 29;
+export const FAKE_FLASH_FROM_LEVEL = 31;
 
 export function getLevelConfig(level: number): LevelConfig {
   return {
     sequenceLength: Math.min(MAX_SEQUENCE, 3 + Math.floor((level - 1) / 3)),
     displayTime: Math.max(MIN_DISPLAY, 900 - (level - 1) * 5),
     gapTime: Math.max(MIN_GAP, 220 - (level - 1) * 2),
+    answerTime: Math.max(1500, 4000 - (level - 1) * 40),
     paletteSize: Math.min(8, 4 + Math.floor((level - 1) / 10)),
-    shuffleBoard: level >= SHUFFLE_FROM_LEVEL,
+    rotates: level >= ROTATE_FROM_LEVEL,
+    fakeFlashes:
+      level < FAKE_FLASH_FROM_LEVEL
+        ? 0
+        : Math.min(3, 1 + Math.floor((level - FAKE_FLASH_FROM_LEVEL) / 20)),
   };
 }
 
@@ -56,9 +65,8 @@ export function getLevelMilestone(level: number): string | null {
   if (level > 1 && current.paletteSize > previous.paletteSize) {
     return `${current.paletteSize} COLORS NOW`;
   }
-  if (level === SHUFFLE_FROM_LEVEL) {
-    return 'THE BOARD SHUFFLES NOW';
-  }
+  if (level === ROTATE_FROM_LEVEL) return 'THE BOARD ROTATES NOW';
+  if (level === FAKE_FLASH_FROM_LEVEL) return 'WATCH FOR FAKE FLASHES';
   if (level > 1 && current.sequenceLength > previous.sequenceLength) {
     return `${current.sequenceLength} TO REMEMBER`;
   }

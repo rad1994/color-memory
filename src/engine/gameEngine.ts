@@ -2,7 +2,7 @@ import { GAME_COLORS, GameColor } from '../constants/colors';
 import { getLevelConfig, LevelConfig } from '../constants/levels';
 import { STROOP_COLORS, StroopColor } from '../constants/stroop';
 
-export type GameMode = 'classic' | 'stroop' | 'daily';
+export type GameMode = 'classic' | 'stroop' | 'daily' | 'reversed';
 
 export type Rng = () => number;
 
@@ -57,9 +57,10 @@ export interface GameState {
 export const HINTS_PER_GAME = 3;
 
 function expectedColorAt(state: GameState, index: number): GameColor | null {
-  return state.mode === 'stroop'
-    ? state.stroopSequence[index]?.ink ?? null
-    : state.sequence[index] ?? null;
+  if (state.mode === 'stroop') return state.stroopSequence[index]?.ink ?? null;
+  // Reversed mode walks the same sequence from the far end.
+  const position = state.mode === 'reversed' ? state.sequence.length - 1 - index : index;
+  return position < 0 ? null : state.sequence[position] ?? null;
 }
 
 // The color the player is expected to answer next, or null outside the input phase.
@@ -72,15 +73,6 @@ export function applyHint(state: GameState): { state: GameState; revealed: GameC
   const revealed = expectedColor(state);
   if (!revealed || state.hintsRemaining <= 0) return { state, revealed: null };
   return { state: { ...state, hintsRemaining: state.hintsRemaining - 1 }, revealed };
-}
-
-function shuffled<T>(items: T[], rng: Rng): T[] {
-  const copy = [...items];
-  for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
 }
 
 // Stroop mode always plays on the fixed four-color direction pad, so the
@@ -96,10 +88,37 @@ function paletteFor(
   if (mode === 'stroop') return STROOP_COLORS;
   // A player who picked fewer colors than the level calls for simply plays with
   // what they chose.
-  const palette = pool.slice(0, Math.min(levelConfig.paletteSize, pool.length));
-  // Board order drives tile position, so shuffling it forces the player to
-  // recall the color itself instead of where it sat last level.
-  return levelConfig.shuffleBoard ? shuffled(palette, rng) : palette;
+  return pool.slice(0, Math.min(levelConfig.paletteSize, pool.length));
+}
+
+export interface PlaybackStep {
+  color: GameColor;
+  /** False for a decoy flash, which must be ignored rather than repeated. */
+  real: boolean;
+}
+
+/**
+ * The flashes to play back for the current level. From the fake-flash levels on,
+ * decoys are mixed in; they are drawn dimmed and crossed out, so the challenge
+ * is holding attention rather than guessing.
+ */
+export function buildPlayback(state: GameState): PlaybackStep[] {
+  const steps: PlaybackStep[] =
+    state.mode === 'stroop'
+      ? state.stroopSequence.map(item => ({ color: item.ink, real: true }))
+      : state.sequence.map(color => ({ color, real: true }));
+
+  const decoys = state.levelConfig.fakeFlashes;
+  if (decoys <= 0) return steps;
+
+  // Offset keeps decoy placement from reusing the stream that dealt the level.
+  const rng = rngFor(state.seed, state.level + 100000);
+  for (let i = 0; i < decoys; i++) {
+    const color = state.palette[Math.floor(rng() * state.palette.length)];
+    const at = Math.floor(rng() * (steps.length + 1));
+    steps.splice(at, 0, { color, real: false });
+  }
+  return steps;
 }
 
 export interface RunOptions {
@@ -188,7 +207,31 @@ export function advanceLevel(state: GameState): GameState {
     streak: newStreak,
     bestStreak,
     comboMultiplier,
-    wheelRotation: state.wheelRotation + 45 + Math.random() * 90,
+    // The ring only starts turning once the rotating-board mechanic unlocks.
+    wheelRotation: levelConfig.rotates
+      ? state.wheelRotation + 40 + rng() * 100
+      : state.wheelRotation,
+  };
+}
+
+/** A wrong answer and a timeout cost the same; this keeps them one code path. */
+export function loseLife(state: GameState): GameState {
+  const newLives = state.lives - 1;
+  if (newLives <= 0) {
+    return { ...state, lives: 0, phase: 'gameover', streak: 0 };
+  }
+  const retryRng = rngFor(state.seed, state.level);
+  return {
+    ...state,
+    lives: newLives,
+    phase: 'fail',
+    inputIndex: 0,
+    streak: 0,
+    comboMultiplier: 1,
+    sequence: generateSequence(state.palette, state.levelConfig.sequenceLength, retryRng),
+    stroopSequence: state.mode === 'stroop'
+      ? generateStroopSequence(state.levelConfig.sequenceLength, retryRng)
+      : [],
   };
 }
 
@@ -198,27 +241,9 @@ export function handleInput(state: GameState, selectedColor: GameColor): GameSta
   // a no-op rather than reading undefined off the end of the array.
   if (!expectedColor) return state;
 
-  if (selectedColor.id !== expectedColor.id) {
-    const newLives = state.lives - 1;
-    if (newLives <= 0) {
-      return { ...state, lives: 0, phase: 'gameover', streak: 0 };
-    }
-    // A seeded run redeals the identical level, so a retry never rerolls the
-    // Daily into easier or harder content than anyone else got.
-    const retryRng = rngFor(state.seed, state.level);
-    return {
-      ...state,
-      lives: newLives,
-      phase: 'fail',
-      inputIndex: 0,
-      streak: 0,
-      comboMultiplier: 1,
-      sequence: generateSequence(state.palette, state.levelConfig.sequenceLength, retryRng),
-      stroopSequence: state.mode === 'stroop'
-        ? generateStroopSequence(state.levelConfig.sequenceLength, retryRng)
-        : [],
-    };
-  }
+  // A seeded run redeals the identical level, so a retry never rerolls the
+  // Daily into easier or harder content than anyone else got.
+  if (selectedColor.id !== expectedColor.id) return loseLife(state);
 
   const nextIndex = state.inputIndex + 1;
   const totalLength = state.mode === 'stroop'

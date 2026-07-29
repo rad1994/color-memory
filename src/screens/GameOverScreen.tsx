@@ -14,7 +14,7 @@ import { Achievement } from '../engine/storage';
 interface Props {
   score: number;
   level: number;
-  mode: 'classic' | 'stroop' | 'daily';
+  mode: 'classic' | 'stroop' | 'daily' | 'reversed';
   newAchievements: Achievement[];
   isNewRecord?: boolean;
   /** Omitted when the run cannot be retried, as with the once-a-day Daily. */
@@ -26,6 +26,7 @@ const MODE_LABELS: Record<Props['mode'], string> = {
   classic: 'CLASSIC',
   stroop: 'STROOP',
   daily: 'DAILY',
+  reversed: 'REVERSED',
 };
 
 export function GameOverScreen({

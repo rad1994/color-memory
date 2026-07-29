@@ -13,16 +13,18 @@ export interface ColorTheme {
 export const THEMES: ColorTheme[] = [
   {
     id: 'classic',
-    name: 'CLASSIC',
+    name: 'NEON',
+    // Saturated and bright, because every node carries a glow behind it —
+    // muted colors disappear against the halo.
     hexes: {
-      red: '#EA3B30',
-      green: '#2FA84F',
-      blue: '#1B6DE8',
-      yellow: '#F5C518',
-      purple: '#8B3FE8',
-      orange: '#F0761E',
-      cyan: '#17BEBB',
-      pink: '#E8407A',
+      red: '#FF2D55',
+      green: '#3DFF6E',
+      blue: '#2E7BFF',
+      yellow: '#FFD426',
+      purple: '#C13BFF',
+      orange: '#FF8A1F',
+      cyan: '#22E8E8',
+      pink: '#FF4FA3',
     },
   },
   {

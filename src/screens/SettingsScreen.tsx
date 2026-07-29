@@ -7,7 +7,14 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
-import { THEME } from '../constants/colors';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  THEME,
+  COLOR_POOL,
+  MIN_PALETTE,
+  MAX_PALETTE,
+  randomPalette,
+} from '../constants/colors';
 import { getSettings, saveSettings, GameSettings } from '../engine/storage';
 import { THEMES } from '../constants/themes';
 import { useTheme } from '../theme/ThemeContext';
@@ -17,12 +24,13 @@ interface Props {
 }
 
 export function SettingsScreen({ onBack }: Props) {
-  const { theme, setThemeId } = useTheme();
+  const { theme, setThemeId, customPalette, setCustomPalette } = useTheme();
   const [settings, setSettings] = useState<GameSettings>({
     soundEnabled: true,
     hapticEnabled: true,
     showTutorial: true,
     themeId: theme.id,
+    customPalette: [],
   });
 
   useEffect(() => {
@@ -111,6 +119,69 @@ export function SettingsScreen({ onBack }: Props) {
           );
         })}
       </View>
+
+      <View style={styles.paletteHeader}>
+        <Text style={styles.sectionTitle}>YOUR COLORS</Text>
+        <View style={styles.paletteActions}>
+          <TouchableOpacity
+            style={styles.smallButton}
+            onPress={() => setCustomPalette(randomPalette())}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.smallButtonText}>RANDOM</Text>
+          </TouchableOpacity>
+          {customPalette.length > 0 && (
+            <TouchableOpacity
+              style={styles.smallButton}
+              onPress={() => setCustomPalette([])}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.smallButtonText}>RESET</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      <Text style={styles.hint}>
+        {customPalette.length === 0
+          ? `Using the theme's colors. Pick ${MIN_PALETTE}–${MAX_PALETTE} to choose your own.`
+          : `${customPalette.length} of ${MAX_PALETTE} chosen`}
+      </Text>
+
+      <View style={styles.poolGrid}>
+        {COLOR_POOL.map(color => {
+          const isPicked = customPalette.includes(color.id);
+          const atLimit = customPalette.length >= MAX_PALETTE && !isPicked;
+          return (
+            <TouchableOpacity
+              key={color.id}
+              activeOpacity={0.8}
+              disabled={atLimit}
+              onPress={() =>
+                setCustomPalette(
+                  isPicked
+                    ? customPalette.filter(id => id !== color.id)
+                    : [...customPalette, color.id]
+                )
+              }
+              style={[
+                styles.poolSwatch,
+                { backgroundColor: color.hex },
+                isPicked && styles.poolSwatchPicked,
+                atLimit && styles.poolSwatchDim,
+              ]}
+            >
+              {isPicked && <Ionicons name="checkmark" size={18} color="#FFFFFF" />}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {customPalette.length > 0 && customPalette.length < MIN_PALETTE && (
+        <Text style={styles.warning}>
+          Pick at least {MIN_PALETTE} — fewer than that and the theme's colors are used instead.
+        </Text>
+      )}
 
       <Text style={styles.version}>Color Memory v1.0.0</Text>
     </ScrollView>
@@ -222,6 +293,60 @@ const styles = StyleSheet.create({
   },
   themeNameActive: {
     color: THEME.text,
+  },
+  paletteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  paletteActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 16,
+  },
+  smallButton: {
+    backgroundColor: THEME.bgCard,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 9,
+  },
+  smallButtonText: {
+    color: THEME.text,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
+  hint: {
+    color: THEME.textDim,
+    fontSize: 11,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  poolGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  poolSwatch: {
+    width: 52,
+    height: 52,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: 'transparent',
+  },
+  poolSwatchPicked: {
+    borderColor: '#FFFFFF',
+  },
+  poolSwatchDim: {
+    opacity: 0.3,
+  },
+  warning: {
+    color: THEME.warning,
+    fontSize: 11,
+    marginTop: 10,
+    marginLeft: 4,
   },
   version: {
     textAlign: 'center',

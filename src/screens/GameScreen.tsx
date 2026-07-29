@@ -43,8 +43,11 @@ interface Props {
 }
 
 export function GameScreen({ mode, seed = null, onGameOver, onBack }: Props) {
-  const { hexFor } = useTheme();
-  const [state, setState] = useState<GameState>(() => createInitialState(mode, seed));
+  const { hexFor, activePool } = useTheme();
+  const [state, setState] = useState<GameState>(() =>
+    // The Daily must deal everyone the same colors, so it ignores a custom pick.
+    createInitialState(mode, { seed, pool: mode === 'daily' ? undefined : activePool })
+  );
   const [showingIndex, setShowingIndex] = useState(-1);
   const [motivText, setMotivText] = useState('');
   const [isPaused, setIsPaused] = useState(false);

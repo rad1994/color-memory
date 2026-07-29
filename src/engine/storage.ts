@@ -21,6 +21,8 @@ export interface GameSettings {
   hapticEnabled: boolean;
   showTutorial: boolean;
   themeId: string;
+  /** Color ids the player picked themselves; empty means use the theme's set. */
+  customPalette: string[];
 }
 
 export interface Achievement {
@@ -35,6 +37,7 @@ const DEFAULT_SETTINGS: GameSettings = {
   hapticEnabled: true,
   showTutorial: true,
   themeId: DEFAULT_THEME_ID,
+  customPalette: [],
 };
 
 export const ACHIEVEMENT_DEFS: Achievement[] = [

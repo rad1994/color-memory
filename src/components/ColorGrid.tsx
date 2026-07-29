@@ -15,7 +15,7 @@ interface TileProps {
 function ColorTile({ color, size, onPress, disabled, highlighted, hinted }: TileProps) {
   const scale = useRef(new Animated.Value(1)).current;
   const { hexFor } = useTheme();
-  const hex = hexFor(color.id);
+  const hex = hexFor(color.id, color.hex);
 
   const animateTo = (toValue: number) =>
     Animated.spring(scale, { toValue, useNativeDriver: true, speed: 50 }).start();

@@ -48,6 +48,8 @@ export interface GameState {
   hintsRemaining: number;
   /** Null means ordinary random play; a number pins the run to fixed content. */
   seed: number | null;
+  /** The colors this run draws from, widened level by level up to paletteSize. */
+  pool: GameColor[];
 }
 
 // Free hints per run for now; the plan is to buy these with collected coins,
@@ -85,18 +87,33 @@ function shuffled<T>(items: T[], rng: Rng): T[] {
 // palette never grows with the level the way it does in classic mode — and its
 // order must never move, since the whole mode rests on a stable color-to-
 // direction mapping.
-function paletteFor(mode: GameMode, levelConfig: LevelConfig, rng: Rng): GameColor[] {
+function paletteFor(
+  mode: GameMode,
+  levelConfig: LevelConfig,
+  rng: Rng,
+  pool: GameColor[]
+): GameColor[] {
   if (mode === 'stroop') return STROOP_COLORS;
-  const palette = GAME_COLORS.slice(0, levelConfig.paletteSize);
+  // A player who picked fewer colors than the level calls for simply plays with
+  // what they chose.
+  const palette = pool.slice(0, Math.min(levelConfig.paletteSize, pool.length));
   // Board order drives tile position, so shuffling it forces the player to
   // recall the color itself instead of where it sat last level.
   return levelConfig.shuffleBoard ? shuffled(palette, rng) : palette;
 }
 
-export function createInitialState(mode: GameMode, seed: number | null = null): GameState {
+export interface RunOptions {
+  seed?: number | null;
+  /** Colors to draw from; defaults to the standard eight. */
+  pool?: GameColor[];
+}
+
+export function createInitialState(mode: GameMode, options: RunOptions = {}): GameState {
+  const seed = options.seed ?? null;
+  const pool = options.pool?.length ? options.pool : GAME_COLORS;
   const levelConfig = getLevelConfig(1);
   const rng = rngFor(seed, 1);
-  const palette = paletteFor(mode, levelConfig, rng);
+  const palette = paletteFor(mode, levelConfig, rng, pool);
 
   return {
     mode,
@@ -117,6 +134,7 @@ export function createInitialState(mode: GameMode, seed: number | null = null): 
     wheelRotation: 0,
     hintsRemaining: HINTS_PER_GAME,
     seed,
+    pool,
   };
 }
 
@@ -146,7 +164,7 @@ export function advanceLevel(state: GameState): GameState {
   const nextLevel = state.level + 1;
   const levelConfig = getLevelConfig(nextLevel);
   const rng = rngFor(state.seed, nextLevel);
-  const palette = paletteFor(state.mode, levelConfig, rng);
+  const palette = paletteFor(state.mode, levelConfig, rng, state.pool);
   const sequence = generateSequence(palette, levelConfig.sequenceLength, rng);
   const newStreak = state.streak + 1;
   const bestStreak = Math.max(state.bestStreak, newStreak);

@@ -6,11 +6,12 @@ import { GameOverScreen } from './src/screens/GameOverScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { StatsScreen } from './src/screens/StatsScreen';
 import { GameMode } from './src/engine/gameEngine';
-import { Achievement } from './src/engine/storage';
+import { Achievement, seedForDate, todayKey } from './src/engine/storage';
+import { ThemeProvider } from './src/theme/ThemeContext';
 
 type Screen =
   | { name: 'home' }
-  | { name: 'game'; mode: GameMode }
+  | { name: 'game'; mode: GameMode; seed: number | null }
   | {
       name: 'gameover';
       score: number;
@@ -31,7 +32,10 @@ export default function App() {
       case 'home':
         return (
           <HomeScreen
-            onStartGame={(mode) => setScreen({ name: 'game', mode })}
+            onStartGame={(mode) => setScreen({ name: 'game', mode, seed: null })}
+            onStartDaily={() =>
+              setScreen({ name: 'game', mode: 'daily', seed: seedForDate(todayKey()) })
+            }
             onOpenStats={() => setScreen({ name: 'stats' })}
             onOpenSettings={() => setScreen({ name: 'settings' })}
             onOpenAchievements={() => setScreen({ name: 'achievements' })}
@@ -40,7 +44,10 @@ export default function App() {
       case 'game':
         return (
           <GameScreen
+            // Remounts on replay so a finished run never carries over.
+            key={`${screen.mode}-${screen.seed ?? 'random'}`}
             mode={screen.mode}
+            seed={screen.seed}
             onGameOver={(score, level, achievements, isNewRecord) =>
               setScreen({ name: 'gameover', score, level, mode: screen.mode, achievements, isNewRecord })
             }
@@ -55,7 +62,12 @@ export default function App() {
             mode={screen.mode}
             newAchievements={screen.achievements}
             isNewRecord={screen.isNewRecord}
-            onPlayAgain={() => setScreen({ name: 'game', mode: screen.mode })}
+            // The Daily is one attempt per day, so there is nothing to replay.
+            onPlayAgain={
+              screen.mode === 'daily'
+                ? undefined
+                : () => setScreen({ name: 'game', mode: screen.mode, seed: null })
+            }
             onHome={() => setScreen({ name: 'home' })}
           />
         );
@@ -69,9 +81,9 @@ export default function App() {
   };
 
   return (
-    <>
+    <ThemeProvider>
       <StatusBar style="light" />
       {renderScreen()}
-    </>
+    </ThemeProvider>
   );
 }

@@ -2,6 +2,7 @@ import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, PanResponder, Pressable, Platform } from 'react-native';
 import { THEME } from '../constants/colors';
 import { STROOP_COLORS, SwipeDirection } from '../constants/stroop';
+import { useTheme } from '../theme/ThemeContext';
 
 const SWIPE_THRESHOLD = 30;
 
@@ -21,6 +22,7 @@ interface Props {
 
 export function SwipePad({ onSwipe, disabled, size, hintDirection }: Props) {
   const [activeDirection, setActiveDirection] = useState<SwipeDirection | null>(null);
+  const { hexFor } = useTheme();
 
   // The pan responder is created once, so it would otherwise close over the
   // first render's props forever. Refs keep it reading current values.
@@ -82,7 +84,7 @@ export function SwipePad({ onSwipe, disabled, size, hintDirection }: Props) {
           styles.badge,
           positionStyle,
           {
-            backgroundColor: color.hex,
+            backgroundColor: hexFor(color.id),
             opacity: disabled ? 0.35 : isActive || isHinted ? 1 : 0.9,
             transform: [{ scale: isActive || isHinted ? 1.22 : 1 }],
           },

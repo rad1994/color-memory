@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { GameColor, THEME } from '../constants/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 interface Props {
   sequence: GameColor[];
@@ -11,6 +12,7 @@ interface Props {
 // The row of dots under the header in design/style-guide.png: entered steps take
 // their color, the rest stay grey so the remaining length is always visible.
 export function SequenceDots({ sequence, filledCount, revealColors = true }: Props) {
+  const { hexFor } = useTheme();
   return (
     <View style={styles.row}>
       {sequence.map((color, i) => {
@@ -21,7 +23,7 @@ export function SequenceDots({ sequence, filledCount, revealColors = true }: Pro
             style={[
               styles.dot,
               {
-                backgroundColor: isFilled && revealColors ? color.hex : THEME.bgElevated,
+                backgroundColor: isFilled && revealColors ? hexFor(color.id) : THEME.bgElevated,
                 transform: [{ scale: i === filledCount ? 1.15 : 1 }],
               },
             ]}

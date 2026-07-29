@@ -16,7 +16,9 @@ interface Props {
 
 export function StatsScreen({ onBack, showAchievements = false }: Props) {
   const [stats, setStats] = useState({
-    classicHigh: 0, stroopHigh: 0, classicLevel: 0, stroopLevel: 0, bestStreak: 0, totalGames: 0,
+    classicHigh: 0, stroopHigh: 0, dailyHigh: 0,
+    classicLevel: 0, stroopLevel: 0, dailyLevel: 0,
+    bestStreak: 0, totalGames: 0, dailyStreak: 0, dailyBestStreak: 0,
   });
   const [achievements, setAchievements] = useState<Achievement[]>([]);
 
@@ -53,6 +55,18 @@ export function StatsScreen({ onBack, showAchievements = false }: Props) {
               <View style={styles.statGrid}>
                 <StatBox label="High Score" value={stats.stroopHigh.toString()} />
                 <StatBox label="Best Level" value={stats.stroopLevel.toString()} />
+              </View>
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Daily Challenge</Text>
+              <View style={styles.statGrid}>
+                <StatBox label="High Score" value={stats.dailyHigh.toLocaleString()} />
+                <StatBox label="Day Streak" value={stats.dailyStreak.toString()} />
+              </View>
+              <View style={[styles.statGrid, { marginTop: 12 }]}>
+                <StatBox label="Best Level" value={stats.dailyLevel.toString()} />
+                <StatBox label="Best Day Streak" value={stats.dailyBestStreak.toString()} />
               </View>
             </View>
 

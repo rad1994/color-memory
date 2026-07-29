@@ -2,7 +2,28 @@ import { GAME_COLORS, GameColor } from '../constants/colors';
 import { getLevelConfig, LevelConfig } from '../constants/levels';
 import { STROOP_COLORS, StroopColor } from '../constants/stroop';
 
-export type GameMode = 'classic' | 'stroop';
+export type GameMode = 'classic' | 'stroop' | 'daily';
+
+export type Rng = () => number;
+
+// Small deterministic PRNG. The Daily Challenge must deal every player the same
+// colors on a given day, which Math.random cannot promise.
+export function mulberry32(seed: number): Rng {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Each level draws from its own stream, so replaying a level after a mistake
+// deals the same colors rather than silently rerolling the daily.
+function rngFor(seed: number | null, level: number): Rng {
+  return seed === null ? Math.random : mulberry32(seed + level * 7919);
+}
+
 
 export interface StroopItem {
   word: StroopColor; // the color name written out — always the wrong answer
@@ -25,6 +46,8 @@ export interface GameState {
   inputIndex: number;
   wheelRotation: number;
   hintsRemaining: number;
+  /** Null means ordinary random play; a number pins the run to fixed content. */
+  seed: number | null;
 }
 
 // Free hints per run for now; the plan is to buy these with collected coins,
@@ -49,10 +72,10 @@ export function applyHint(state: GameState): { state: GameState; revealed: GameC
   return { state: { ...state, hintsRemaining: state.hintsRemaining - 1 }, revealed };
 }
 
-function shuffled<T>(items: T[]): T[] {
+function shuffled<T>(items: T[], rng: Rng): T[] {
   const copy = [...items];
   for (let i = copy.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rng() * (i + 1));
     [copy[i], copy[j]] = [copy[j], copy[i]];
   }
   return copy;
@@ -62,18 +85,18 @@ function shuffled<T>(items: T[]): T[] {
 // palette never grows with the level the way it does in classic mode — and its
 // order must never move, since the whole mode rests on a stable color-to-
 // direction mapping.
-function paletteFor(mode: GameMode, levelConfig: LevelConfig): GameColor[] {
+function paletteFor(mode: GameMode, levelConfig: LevelConfig, rng: Rng): GameColor[] {
   if (mode === 'stroop') return STROOP_COLORS;
   const palette = GAME_COLORS.slice(0, levelConfig.paletteSize);
   // Board order drives tile position, so shuffling it forces the player to
   // recall the color itself instead of where it sat last level.
-  return levelConfig.shuffleBoard ? shuffled(palette) : palette;
+  return levelConfig.shuffleBoard ? shuffled(palette, rng) : palette;
 }
 
-export function createInitialState(mode: GameMode): GameState {
+export function createInitialState(mode: GameMode, seed: number | null = null): GameState {
   const levelConfig = getLevelConfig(1);
-  const palette = paletteFor(mode, levelConfig);
-  const sequence = generateSequence(palette, levelConfig.sequenceLength);
+  const rng = rngFor(seed, 1);
+  const palette = paletteFor(mode, levelConfig, rng);
 
   return {
     mode,
@@ -83,34 +106,37 @@ export function createInitialState(mode: GameMode): GameState {
     streak: 0,
     bestStreak: 0,
     comboMultiplier: 1,
-    sequence,
-    stroopSequence: mode === 'stroop' ? generateStroopSequence(levelConfig.sequenceLength) : [],
+    sequence: generateSequence(palette, levelConfig.sequenceLength, rng),
+    stroopSequence: mode === 'stroop'
+      ? generateStroopSequence(levelConfig.sequenceLength, rng)
+      : [],
     palette,
     levelConfig,
     phase: 'ready',
     inputIndex: 0,
     wheelRotation: 0,
     hintsRemaining: HINTS_PER_GAME,
+    seed,
   };
 }
 
-export function generateSequence(palette: GameColor[], length: number): GameColor[] {
+export function generateSequence(palette: GameColor[], length: number, rng: Rng = Math.random): GameColor[] {
   const seq: GameColor[] = [];
   for (let i = 0; i < length; i++) {
-    seq.push(palette[Math.floor(Math.random() * palette.length)]);
+    seq.push(palette[Math.floor(rng() * palette.length)]);
   }
   return seq;
 }
 
-export function generateStroopSequence(length: number): StroopItem[] {
+export function generateStroopSequence(length: number, rng: Rng = Math.random): StroopItem[] {
   const items: StroopItem[] = [];
   for (let i = 0; i < length; i++) {
-    const ink = STROOP_COLORS[Math.floor(Math.random() * STROOP_COLORS.length)];
+    const ink = STROOP_COLORS[Math.floor(rng() * STROOP_COLORS.length)];
     // The written word never matches the ink, and is always another color on the
     // pad — so reading it points at a real, wrong swipe direction. That response
     // conflict is what makes the interference bite.
     const conflicting = STROOP_COLORS.filter(c => c.id !== ink.id);
-    const word = conflicting[Math.floor(Math.random() * conflicting.length)];
+    const word = conflicting[Math.floor(rng() * conflicting.length)];
     items.push({ word, ink });
   }
   return items;
@@ -119,8 +145,9 @@ export function generateStroopSequence(length: number): StroopItem[] {
 export function advanceLevel(state: GameState): GameState {
   const nextLevel = state.level + 1;
   const levelConfig = getLevelConfig(nextLevel);
-  const palette = paletteFor(state.mode, levelConfig);
-  const sequence = generateSequence(palette, levelConfig.sequenceLength);
+  const rng = rngFor(state.seed, nextLevel);
+  const palette = paletteFor(state.mode, levelConfig, rng);
+  const sequence = generateSequence(palette, levelConfig.sequenceLength, rng);
   const newStreak = state.streak + 1;
   const bestStreak = Math.max(state.bestStreak, newStreak);
 
@@ -135,7 +162,9 @@ export function advanceLevel(state: GameState): GameState {
     levelConfig,
     palette,
     sequence,
-    stroopSequence: state.mode === 'stroop' ? generateStroopSequence(levelConfig.sequenceLength) : [],
+    stroopSequence: state.mode === 'stroop'
+      ? generateStroopSequence(levelConfig.sequenceLength, rng)
+      : [],
     phase: 'ready',
     inputIndex: 0,
     streak: newStreak,
@@ -156,7 +185,9 @@ export function handleInput(state: GameState, selectedColor: GameColor): GameSta
     if (newLives <= 0) {
       return { ...state, lives: 0, phase: 'gameover', streak: 0 };
     }
-    const newSequence = generateSequence(state.palette, state.levelConfig.sequenceLength);
+    // A seeded run redeals the identical level, so a retry never rerolls the
+    // Daily into easier or harder content than anyone else got.
+    const retryRng = rngFor(state.seed, state.level);
     return {
       ...state,
       lives: newLives,
@@ -164,9 +195,9 @@ export function handleInput(state: GameState, selectedColor: GameColor): GameSta
       inputIndex: 0,
       streak: 0,
       comboMultiplier: 1,
-      sequence: newSequence,
+      sequence: generateSequence(state.palette, state.levelConfig.sequenceLength, retryRng),
       stroopSequence: state.mode === 'stroop'
-        ? generateStroopSequence(state.levelConfig.sequenceLength)
+        ? generateStroopSequence(state.levelConfig.sequenceLength, retryRng)
         : [],
     };
   }

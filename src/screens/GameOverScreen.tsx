@@ -14,12 +14,19 @@ import { Achievement } from '../engine/storage';
 interface Props {
   score: number;
   level: number;
-  mode: 'classic' | 'stroop';
+  mode: 'classic' | 'stroop' | 'daily';
   newAchievements: Achievement[];
   isNewRecord?: boolean;
-  onPlayAgain: () => void;
+  /** Omitted when the run cannot be retried, as with the once-a-day Daily. */
+  onPlayAgain?: () => void;
   onHome: () => void;
 }
+
+const MODE_LABELS: Record<Props['mode'], string> = {
+  classic: 'CLASSIC',
+  stroop: 'STROOP',
+  daily: 'DAILY',
+};
 
 export function GameOverScreen({
   score,
@@ -57,7 +64,7 @@ export function GameOverScreen({
           </View>
           <View style={styles.metaDivider} />
           <View style={styles.metaItem}>
-            <Text style={styles.metaValue}>{mode === 'classic' ? 'CLASSIC' : 'STROOP'}</Text>
+            <Text style={styles.metaValue}>{MODE_LABELS[mode]}</Text>
             <Text style={styles.metaLabel}>MODE</Text>
           </View>
         </View>
@@ -76,12 +83,20 @@ export function GameOverScreen({
           </ScrollView>
         )}
 
-        <TouchableOpacity style={styles.playAgain} onPress={onPlayAgain} activeOpacity={0.85}>
-          <Ionicons name="refresh" size={18} color={THEME.text} />
-          <Text style={styles.playAgainLabel}>PLAY AGAIN</Text>
-        </TouchableOpacity>
+        {onPlayAgain ? (
+          <TouchableOpacity style={styles.playAgain} onPress={onPlayAgain} activeOpacity={0.85}>
+            <Ionicons name="refresh" size={18} color={THEME.text} />
+            <Text style={styles.playAgainLabel}>PLAY AGAIN</Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={styles.comeBack}>One attempt a day — come back tomorrow</Text>
+        )}
 
-        <TouchableOpacity style={styles.home} onPress={onHome} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={[styles.home, !onPlayAgain && styles.homeSolo]}
+          onPress={onHome}
+          activeOpacity={0.85}
+        >
           <Text style={styles.homeLabel}>HOME</Text>
         </TouchableOpacity>
       </Animated.View>
@@ -198,10 +213,21 @@ const styles = StyleSheet.create({
     color: THEME.text,
     letterSpacing: 1.2,
   },
+  comeBack: {
+    fontSize: 12,
+    color: THEME.textDim,
+    textAlign: 'center',
+    marginTop: 22,
+  },
   home: {
     alignSelf: 'stretch',
     paddingVertical: 13,
     marginTop: 8,
+  },
+  homeSolo: {
+    backgroundColor: THEME.accent,
+    borderRadius: 13,
+    marginTop: 14,
   },
   homeLabel: {
     fontSize: 13,

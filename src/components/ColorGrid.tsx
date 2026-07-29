@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { View, StyleSheet, Animated, Pressable } from 'react-native';
 import { GameColor } from '../constants/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 interface TileProps {
   color: GameColor;
@@ -13,6 +14,8 @@ interface TileProps {
 
 function ColorTile({ color, size, onPress, disabled, highlighted, hinted }: TileProps) {
   const scale = useRef(new Animated.Value(1)).current;
+  const { hexFor } = useTheme();
+  const hex = hexFor(color.id);
 
   const animateTo = (toValue: number) =>
     Animated.spring(scale, { toValue, useNativeDriver: true, speed: 50 }).start();
@@ -29,10 +32,10 @@ function ColorTile({ color, size, onPress, disabled, highlighted, hinted }: Tile
           {
             width: size,
             height: size,
-            backgroundColor: color.hex,
+            backgroundColor: hex,
             // Dim unlit tiles while the sequence plays so the lit one reads clearly.
             opacity: highlighted === undefined ? 1 : highlighted ? 1 : 0.28,
-            shadowColor: color.hex,
+            shadowColor: hex,
             shadowOpacity: highlighted ? 0.8 : 0,
             shadowRadius: highlighted ? 24 : 0,
             elevation: highlighted ? 16 : 0,

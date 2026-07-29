@@ -21,6 +21,7 @@ import {
   applyHint,
 } from '../engine/gameEngine';
 import { saveGameResult, getSettings, getHighScore, Achievement } from '../engine/storage';
+import { useTheme } from '../theme/ThemeContext';
 import { ColorGrid } from '../components/ColorGrid';
 import { SequenceDots } from '../components/SequenceDots';
 import { SwipePad } from '../components/SwipePad';
@@ -30,6 +31,8 @@ const HINT_VISIBLE_MS = 1400;
 
 interface Props {
   mode: GameMode;
+  /** Pins the run to fixed content — used by the Daily Challenge. */
+  seed?: number | null;
   onGameOver: (
     score: number,
     level: number,
@@ -39,8 +42,9 @@ interface Props {
   onBack: () => void;
 }
 
-export function GameScreen({ mode, onGameOver, onBack }: Props) {
-  const [state, setState] = useState<GameState>(() => createInitialState(mode));
+export function GameScreen({ mode, seed = null, onGameOver, onBack }: Props) {
+  const { hexFor } = useTheme();
+  const [state, setState] = useState<GameState>(() => createInitialState(mode, seed));
   const [showingIndex, setShowingIndex] = useState(-1);
   const [motivText, setMotivText] = useState('');
   const [isPaused, setIsPaused] = useState(false);
@@ -305,7 +309,7 @@ export function GameScreen({ mode, onGameOver, onBack }: Props) {
       {mode === 'stroop' && (
         <View style={styles.wordArea}>
           {isShowing && showingIndex >= 0 && state.stroopSequence[showingIndex] && (
-            <Text style={[styles.stroopWord, { color: state.stroopSequence[showingIndex].ink.hex }]}>
+            <Text style={[styles.stroopWord, { color: hexFor(state.stroopSequence[showingIndex].ink.id) }]}>
               {state.stroopSequence[showingIndex].word.name}
             </Text>
           )}

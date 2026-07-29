@@ -8,10 +8,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME, GAME_COLORS } from '../constants/colors';
-import { getAllStats } from '../engine/storage';
+import { getAllStats, getDailyStatus, DailyStatus } from '../engine/storage';
+import { useTheme } from '../theme/ThemeContext';
 
 interface Props {
   onStartGame: (mode: 'classic' | 'stroop') => void;
+  onStartDaily: () => void;
   onOpenStats: () => void;
   onOpenSettings: () => void;
   onOpenAchievements: () => void;
@@ -19,16 +21,23 @@ interface Props {
 
 const LOGO_TILES = ['red', 'green', 'blue', 'yellow'];
 
-export function HomeScreen({ onStartGame, onOpenStats, onOpenSettings, onOpenAchievements }: Props) {
-  const [stats, setStats] = useState({
-    classicHigh: 0, stroopHigh: 0, classicLevel: 0, stroopLevel: 0, bestStreak: 0, totalGames: 0,
-  });
+export function HomeScreen({
+  onStartGame,
+  onStartDaily,
+  onOpenStats,
+  onOpenSettings,
+  onOpenAchievements,
+}: Props) {
+  const { hexFor } = useTheme();
+  const [stats, setStats] = useState({ classicHigh: 0, stroopHigh: 0 });
+  const [daily, setDaily] = useState<DailyStatus | null>(null);
 
   const scale = useRef(new Animated.Value(0.85)).current;
   const fade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    getAllStats().then(setStats);
+    getAllStats().then(s => setStats({ classicHigh: s.classicHigh, stroopHigh: s.stroopHigh }));
+    getDailyStatus().then(setDaily);
     Animated.parallel([
       Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 9 }),
       Animated.timing(fade, { toValue: 1, duration: 500, useNativeDriver: true }),
@@ -36,6 +45,7 @@ export function HomeScreen({ onStartGame, onOpenStats, onOpenSettings, onOpenAch
   }, []);
 
   const bestScore = Math.max(stats.classicHigh, stats.stroopHigh);
+  const playedToday = daily?.playedToday ?? false;
 
   return (
     <View style={styles.container}>
@@ -43,13 +53,7 @@ export function HomeScreen({ onStartGame, onOpenStats, onOpenSettings, onOpenAch
         <View style={styles.logoCard}>
           <View style={styles.logoGrid}>
             {LOGO_TILES.map(id => (
-              <View
-                key={id}
-                style={[
-                  styles.logoTile,
-                  { backgroundColor: GAME_COLORS.find(c => c.id === id)!.hex },
-                ]}
-              />
+              <View key={id} style={[styles.logoTile, { backgroundColor: hexFor(id) }]} />
             ))}
           </View>
         </View>
@@ -59,16 +63,14 @@ export function HomeScreen({ onStartGame, onOpenStats, onOpenSettings, onOpenAch
           {'COLORS'.split('').map((letter, i) => (
             <Text
               key={i}
-              style={[styles.wordmarkLetter, { color: GAME_COLORS[i % GAME_COLORS.length].hex }]}
+              style={[styles.wordmarkLetter, { color: hexFor(GAME_COLORS[i % GAME_COLORS.length].id) }]}
             >
               {letter}
             </Text>
           ))}
         </View>
 
-        {bestScore > 0 && (
-          <Text style={styles.best}>BEST {bestScore.toLocaleString()}</Text>
-        )}
+        {bestScore > 0 && <Text style={styles.best}>BEST {bestScore.toLocaleString()}</Text>}
       </Animated.View>
 
       <View style={styles.actions}>
@@ -79,6 +81,37 @@ export function HomeScreen({ onStartGame, onOpenStats, onOpenSettings, onOpenAch
         >
           <Ionicons name="play" size={20} color={THEME.text} />
           <Text style={styles.primaryLabel}>PLAY</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.primaryButton,
+            { backgroundColor: THEME.success },
+            playedToday && styles.buttonDone,
+          ]}
+          onPress={onStartDaily}
+          disabled={playedToday}
+          activeOpacity={0.85}
+        >
+          <Ionicons
+            name={playedToday ? 'checkmark-circle' : 'calendar'}
+            size={20}
+            color={THEME.text}
+          />
+          <View style={styles.dailyLabels}>
+            <Text style={styles.primaryLabel}>DAILY CHALLENGE</Text>
+            <Text style={styles.dailySub}>
+              {playedToday
+                ? `Done today — ${daily?.lastScore.toLocaleString()} pts`
+                : 'Same puzzle for everyone today'}
+            </Text>
+          </View>
+          {!!daily?.streak && (
+            <View style={styles.streakChip}>
+              <Ionicons name="flame" size={12} color={THEME.warning} />
+              <Text style={styles.streakChipText}>{daily.streak}</Text>
+            </View>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -129,46 +162,46 @@ const styles = StyleSheet.create({
   },
   logoBlock: {
     alignItems: 'center',
-    marginBottom: 56,
+    marginBottom: 40,
   },
   logoCard: {
-    width: 132,
-    height: 132,
-    borderRadius: 30,
+    width: 118,
+    height: 118,
+    borderRadius: 28,
     backgroundColor: THEME.bgLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
   logoGrid: {
-    width: 96,
-    height: 96,
+    width: 86,
+    height: 86,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 7,
   },
   logoTile: {
-    width: 44,
-    height: 44,
-    borderRadius: 11,
+    width: 39,
+    height: 39,
+    borderRadius: 10,
   },
   wordmarkTop: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '900',
     color: THEME.text,
     letterSpacing: 5,
-    marginTop: 22,
+    marginTop: 20,
   },
   wordmarkRow: {
     flexDirection: 'row',
     marginTop: 2,
   },
   wordmarkLetter: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '900',
     letterSpacing: 5,
   },
   best: {
-    marginTop: 16,
+    marginTop: 14,
     color: THEME.textDim,
     fontSize: 12,
     fontWeight: '700',
@@ -183,29 +216,55 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    paddingVertical: 17,
+    paddingVertical: 15,
+    paddingHorizontal: 16,
     borderRadius: 14,
-    marginBottom: 12,
+    marginBottom: 11,
+  },
+  buttonDone: {
+    opacity: 0.45,
   },
   primaryLabel: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: THEME.text,
-    letterSpacing: 1.5,
+    letterSpacing: 1.4,
+  },
+  dailyLabels: {
+    flex: 1,
+  },
+  dailySub: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.75)',
+    marginTop: 2,
+  },
+  streakChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 9,
+  },
+  streakChipText: {
+    color: THEME.warning,
+    fontWeight: '900',
+    fontSize: 12,
   },
   iconRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 14,
-    marginTop: 14,
+    marginTop: 12,
   },
   iconAction: {
     alignItems: 'center',
     gap: 7,
   },
   iconTile: {
-    width: 58,
-    height: 58,
+    width: 56,
+    height: 56,
     borderRadius: 16,
     backgroundColor: THEME.bgLight,
     justifyContent: 'center',

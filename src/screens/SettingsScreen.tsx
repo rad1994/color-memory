@@ -5,19 +5,24 @@ import {
   Switch,
   TouchableOpacity,
   StyleSheet,
+  ScrollView,
 } from 'react-native';
 import { THEME } from '../constants/colors';
 import { getSettings, saveSettings, GameSettings } from '../engine/storage';
+import { THEMES } from '../constants/themes';
+import { useTheme } from '../theme/ThemeContext';
 
 interface Props {
   onBack: () => void;
 }
 
 export function SettingsScreen({ onBack }: Props) {
+  const { theme, setThemeId } = useTheme();
   const [settings, setSettings] = useState<GameSettings>({
     soundEnabled: true,
     hapticEnabled: true,
     showTutorial: true,
+    themeId: theme.id,
   });
 
   useEffect(() => {
@@ -31,7 +36,7 @@ export function SettingsScreen({ onBack }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Text style={styles.backText}>← Back</Text>
@@ -85,8 +90,30 @@ export function SettingsScreen({ onBack }: Props) {
         </View>
       </View>
 
+      <Text style={styles.sectionTitle}>COLOR THEME</Text>
+      <View style={styles.themeGrid}>
+        {THEMES.map(t => {
+          const isActive = t.id === theme.id;
+          return (
+            <TouchableOpacity
+              key={t.id}
+              style={[styles.themeCard, isActive && styles.themeCardActive]}
+              onPress={() => setThemeId(t.id)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.swatchGrid}>
+                {['red', 'green', 'blue', 'yellow'].map(id => (
+                  <View key={id} style={[styles.swatch, { backgroundColor: t.hexes[id] }]} />
+                ))}
+              </View>
+              <Text style={[styles.themeName, isActive && styles.themeNameActive]}>{t.name}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
       <Text style={styles.version}>Color Memory v1.0.0</Text>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -94,6 +121,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: THEME.bg,
+  },
+  content: {
     paddingTop: 50,
     paddingHorizontal: 20,
   },
@@ -145,10 +174,60 @@ const styles = StyleSheet.create({
     color: THEME.textDim,
     marginTop: 2,
   },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: THEME.textDim,
+    letterSpacing: 2,
+    marginTop: 28,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  themeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  themeCard: {
+    flexGrow: 1,
+    flexBasis: '45%',
+    alignItems: 'center',
+    backgroundColor: THEME.bgCard,
+    borderRadius: 14,
+    paddingVertical: 14,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  themeCardActive: {
+    borderColor: THEME.accent,
+  },
+  swatchGrid: {
+    width: 44,
+    height: 44,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  swatch: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+  },
+  themeName: {
+    marginTop: 10,
+    fontSize: 11,
+    fontWeight: '800',
+    color: THEME.textDim,
+    letterSpacing: 1.2,
+  },
+  themeNameActive: {
+    color: THEME.text,
+  },
   version: {
     textAlign: 'center',
     color: THEME.textDim,
     fontSize: 12,
-    marginTop: 40,
+    marginTop: 30,
+    marginBottom: 30,
   },
 });
